@@ -1,28 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { useActivityStore } from "../store/useActivityStore";
-import { useBindingsStore } from "../store/useBindingsStore";
 
 export function ActivityPage() {
   const entries = useActivityStore((s) => s.entries);
   const clear = useActivityStore((s) => s.clear);
   const pushActivity = useActivityStore((s) => s.push);
-  const bindings = useBindingsStore((s) => s.bindings);
 
-  const [agentId, setAgentId] = useState("");
   const [command, setCommand] = useState("");
   const [busy, setBusy] = useState(false);
-
-  const agentIds = Object.keys(bindings);
 
   const execute = async () => {
     if (!command.trim()) return;
     setBusy(true);
 
-    const selectedAgent = agentId || agentIds[0] || "default";
-    const selectedNode = "local";
-
-    pushActivity("info", `执行任务：[${selectedAgent}] ${command}`);
+    pushActivity("info", `$ ${command}`);
 
     try {
       const result = await invoke<{
@@ -30,16 +22,7 @@ export function ActivityPage() {
         stdout: string;
         stderr: string;
         durationMs: number;
-      }>("execute_task", {
-        localNodeId: selectedNode,
-        task: {
-          taskId: crypto.randomUUID(),
-          agentId: selectedAgent,
-          action: "system.run",
-          args: { command },
-          timeoutSec: 30
-        }
-      });
+      }>("run_command", { command });
 
       pushActivity(
         result.exitCode === 0 ? "info" : "error",
@@ -65,26 +48,8 @@ export function ActivityPage() {
       </div>
 
       <div className="execute-panel">
-        <h3>快速执行</h3>
-        <div className="form-grid">
-          <label>
-            Agent
-            <select
-              aria-label="Agent"
-              value={agentId}
-              onChange={(e) => setAgentId(e.target.value)}
-            >
-              <option value="">
-                {agentIds.length ? "选择 Agent..." : "无绑定"}
-              </option>
-              {agentIds.map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        <h3>本机执行</h3>
+        <p className="hint">通过 SSH 隧道在本机执行命令，结果返回给远程网关。</p>
         <label>
           命令
           <input

@@ -200,6 +200,20 @@ fn execute_task(
     executor.execute(&task)
 }
 
+/// MVP simplified command: run a shell command directly, no binding check.
+#[tauri::command]
+fn run_command(command: String) -> Result<executor::TaskExecutionOutput, String> {
+    let task = tasks::IncomingTask {
+        task_id: String::new(),
+        agent_id: String::new(),
+        action: "system.run".to_string(),
+        args: serde_json::json!({ "command": command }),
+        timeout_sec: 30,
+    };
+    let executor = executor::TaskExecutor::new();
+    executor.execute(&task)
+}
+
 #[tauri::command]
 fn emergency_disconnect(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let mut tunnel = state
@@ -228,6 +242,7 @@ pub fn run() {
             remove_agent_binding,
             list_agent_bindings,
             execute_task,
+            run_command,
             emergency_disconnect
         ])
         .run(tauri::generate_context!())
