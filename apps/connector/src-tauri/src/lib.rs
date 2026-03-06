@@ -13,11 +13,22 @@ use std::sync::Mutex;
 
 use tauri::Manager;
 
-#[derive(Default)]
 struct AppState {
     tunnel: Mutex<ssh_tunnel::TunnelManager>,
     bindings: Mutex<bindings::BindingMap>,
     task_loop: Mutex<tasks::TaskLoopControl>,
+    heartbeat: Mutex<heartbeat::HeartbeatMonitor>,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            tunnel: Mutex::new(ssh_tunnel::TunnelManager::new()),
+            bindings: Mutex::new(bindings::BindingMap::default()),
+            task_loop: Mutex::new(tasks::TaskLoopControl::new()),
+            heartbeat: Mutex::new(heartbeat::HeartbeatMonitor::new(3)),
+        }
+    }
 }
 
 fn config_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -58,10 +69,20 @@ fn start_tunnel(
         Ok(()) => {
             let status = tunnel.refresh_status();
             eprintln!("[connector] start_tunnel success state={:?}", status.state);
+            if let Ok(mut hb) = state.heartbeat.lock() {
+                hb.record_sample(health::HeartbeatSample {
+                    latency_ms: 0,
+                    tunnel_connected: true,
+                    gateway_ok: true,
+                });
+            }
             Ok(status)
         }
         Err(err) => {
             eprintln!("[connector] start_tunnel failed: {err}");
+            if let Ok(mut hb) = state.heartbeat.lock() {
+                hb.record_failure();
+            }
             Err(err)
         }
     }
@@ -88,6 +109,37 @@ fn get_tunnel_status(state: tauri::State<'_, AppState>) -> Result<ssh_tunnel::Tu
         .lock()
         .map_err(|_| "failed to acquire tunnel lock".to_string())?;
     Ok(tunnel.refresh_status())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HealthSummaryResponse {
+    latency_ms: u64,
+    tunnel_connected: bool,
+    gateway_ok: bool,
+    consecutive_failures: u32,
+}
+
+#[tauri::command]
+fn get_health_summary(state: tauri::State<'_, AppState>) -> Result<HealthSummaryResponse, String> {
+    let mut tunnel = state
+        .tunnel
+        .lock()
+        .map_err(|_| "failed to acquire tunnel lock".to_string())?;
+    let heartbeat = state
+        .heartbeat
+        .lock()
+        .map_err(|_| "failed to acquire heartbeat lock".to_string())?;
+
+    let status = tunnel.refresh_status();
+    let connected = status.state == ssh_tunnel::TunnelState::Connected;
+
+    Ok(HealthSummaryResponse {
+        latency_ms: 0,
+        tunnel_connected: connected,
+        gateway_ok: connected,
+        consecutive_failures: heartbeat.consecutive_failures(),
+    })
 }
 
 #[tauri::command]
@@ -171,6 +223,7 @@ pub fn run() {
             start_tunnel,
             stop_tunnel,
             get_tunnel_status,
+            get_health_summary,
             set_agent_binding,
             remove_agent_binding,
             list_agent_bindings,
