@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useMemo, useState } from "react";
 import { useActivityStore } from "../store/useActivityStore";
-import { createDefaultConfig } from "../types/config";
+import { useConfigStore } from "../store/useConfigStore";
 import type { TunnelStatus } from "../types/tunnel";
 
 function prettyState(state: TunnelStatus["state"]): string {
@@ -18,7 +18,8 @@ function prettyState(state: TunnelStatus["state"]): string {
 }
 
 export function ConnectionPage() {
-  const [server, setServer] = useState(createDefaultConfig().server);
+  const config = useConfigStore((s) => s.config);
+  const [server, setServer] = useState(config.server);
   const [status, setStatus] = useState<TunnelStatus>({
     state: "disconnected",
     reconnectAttempts: 0,
@@ -47,6 +48,10 @@ export function ConnectionPage() {
       const next = await invoke<TunnelStatus>("start_tunnel", { server });
       setStatus(next);
       pushActivity("info", `隧道状态 -> ${prettyState(next.state)}`);
+      // Persist config on successful connection
+      await invoke("save_app_config", {
+        cfg: { ...config, server }
+      }).catch(() => {});
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);

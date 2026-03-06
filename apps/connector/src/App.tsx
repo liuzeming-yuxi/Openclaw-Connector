@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useState } from "react";
 import { ActivityPage } from "./pages/ActivityPage";
 import { BindingsPage } from "./pages/BindingsPage";
 import { ConnectionPage } from "./pages/ConnectionPage";
 import { DangerPage } from "./pages/DangerPage";
 import { HealthPage } from "./pages/HealthPage";
+import { useConfigStore } from "./store/useConfigStore";
+import type { ConnectorConfig } from "./types/config";
 
 const tabs = ["connection", "bindings", "health", "activity", "danger"] as const;
 type Tab = (typeof tabs)[number];
@@ -18,6 +21,17 @@ const tabLabel: Record<Tab, string> = {
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("connection");
+  const setConfig = useConfigStore((s) => s.setConfig);
+
+  useEffect(() => {
+    invoke("load_app_config")
+      .then((cfg) => {
+        if (cfg) setConfig(cfg as ConnectorConfig);
+      })
+      .catch(() => {
+        // use default config from store
+      });
+  }, [setConfig]);
 
   return (
     <main className="app-shell">
