@@ -1,4 +1,25 @@
-# Local agent skill caches / environment artifacts
+# Dependencies
+node_modules/
+
+# Rust build artifacts
+target/
+
+# Build output
+dist/
+
+# OS
+.DS_Store
+
+# IDE / Editor
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# TypeScript
+tsconfig.tsbuildinfo
+
+# Agent skill caches
 .adal/
 .agent/
 .agents/
@@ -29,13 +50,3 @@
 .zencoder/
 skills/
 skills-lock.json
-
-# Node
-node_modules/
-
-# Rust
-target/
-
-# Connector build artifacts
-apps/connector/src-tauri/target/
-apps/connector/node_modules/

@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0F172A;
+  --color-foreground: #F8FAFC;
+  
+  --color-card: #1E293B;
+  --color-card-foreground: #F8FAFC;
+  
+  --color-primary: #22C55E;
+  --color-primary-foreground: #022C22;
+  
+  --color-secondary: #334155;
+  --color-secondary-foreground: #F8FAFC;
+  
+  --color-muted: #1E293B;
+  --color-muted-foreground: #94A3B8;
+  
+  --color-accent: #0F172A;
+  --color-accent-foreground: #F8FAFC;
+  
+  --color-destructive: #EF4444;
+  --color-destructive-foreground: #F8FAFC;
+  
+  --color-border: #334155;
+  --color-input: #334155;
+  --color-ring: #22C55E;
+
+  --font-sans: 'Fira Sans', 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'Fira Code', 'IBM Plex Mono', monospace;
+  
+  --radius-lg: 0.5rem;
+  --radius-md: calc(0.5rem - 2px);
+  --radius-sm: calc(0.5rem - 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  input[type="password"] {
+    font-family: system-ui, sans-serif;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background-image: radial-gradient(circle at 15% 50%, rgba(34, 197, 94, 0.05), transparent 25%), radial-gradient(circle at 85% 30%, rgba(14, 165, 233, 0.05), transparent 25%);
+  }
+}
+
+/* Custom Utilities based on ui-ux-pro-max guidelines */
+@layer utilities {
+  .glass-card {
+    @apply bg-slate-800/80 backdrop-blur-md border border-slate-700/50 shadow-xl;
+  }
+  .input-base {
+    @apply h-10 w-full rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2 text-sm text-slate-100 transition-colors focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .label-base {
+    @apply block text-sm font-medium text-slate-300 mb-1.5;
+  }
+  .btn-base {
+    @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 cursor-pointer;
+  }
+  .btn-primary {
+    @apply bg-emerald-600 text-white hover:bg-emerald-500 shadow-sm border border-emerald-500/50;
+  }
+  .btn-secondary {
+    @apply bg-slate-800 text-slate-100 hover:bg-slate-700 border border-slate-700;
+  }
+  .btn-danger {
+    @apply bg-red-900/50 text-red-100 hover:bg-red-900/80 border border-red-800;
+  }
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+  .status-dot-online {
+    @apply bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)];
+  }
+  .status-dot-pending {
+    @apply bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)];
+  }
+  .status-dot-offline {
+    @apply bg-red-500;
+  }
+}

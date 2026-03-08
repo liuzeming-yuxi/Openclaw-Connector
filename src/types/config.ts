@@ -38,7 +38,7 @@ export function createDefaultConfig(): ConnectorConfig {
     globalAllow: true,
     gatewayToken: "",
     nodeId: crypto.randomUUID(),
-    nodeName: "OpenClaw Connector (macOS)",
+    nodeName: "用户本地",
     cdpPort: 9222,
     cdpRemotePort: 19222
   };
