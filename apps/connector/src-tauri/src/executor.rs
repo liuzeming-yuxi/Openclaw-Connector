@@ -1,4 +1,3 @@
-use crate::tasks::IncomingTask;
 use serde::Serialize;
 use std::process::Command;
 use std::time::Instant;
@@ -20,24 +19,16 @@ impl TaskExecutor {
         Self
     }
 
-    pub fn execute(&self, task: &IncomingTask) -> Result<TaskExecutionOutput, String> {
-        match task.action.as_str() {
-            "system.run" => self.run_shell_command(task),
-            other => Err(format!("unsupported action: {other}")),
+    /// Execute a command given as an array of strings (OpenClaw node protocol).
+    /// e.g. ["bash", "-lc", "ls -la"] or ["uname", "-a"]
+    pub fn execute_command(&self, parts: &[String]) -> Result<TaskExecutionOutput, String> {
+        if parts.is_empty() {
+            return Err("empty command".to_string());
         }
-    }
-
-    fn run_shell_command(&self, task: &IncomingTask) -> Result<TaskExecutionOutput, String> {
-        let command = task
-            .args
-            .get("command")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| "system.run requires args.command string".to_string())?;
 
         let start = Instant::now();
-        let output = Command::new("/bin/zsh")
-            .arg("-lc")
-            .arg(command)
+        let output = Command::new(&parts[0])
+            .args(&parts[1..])
             .output()
             .map_err(|err| format!("failed to run command: {err}"))?;
 

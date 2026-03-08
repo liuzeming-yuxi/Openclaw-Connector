@@ -62,6 +62,9 @@ impl TunnelManager {
             let _ = self.stop();
         }
 
+        // Kill any orphaned process holding the local port (e.g. from a previous app crash).
+        Self::kill_port_holder(server.local_port);
+
         self.state = TunnelState::Connecting;
         self.active_server = Some(server.clone());
         self.last_error = None;
@@ -159,6 +162,10 @@ impl TunnelManager {
         }
     }
 
+    pub fn active_server(&self) -> Option<ServerConfig> {
+        self.active_server.clone()
+    }
+
     pub fn refresh_status(&mut self) -> TunnelStatus {
         if let Some(child) = self.child.as_mut() {
             match child.try_wait() {
@@ -176,6 +183,23 @@ impl TunnelManager {
             }
         }
         self.status()
+    }
+
+    /// Kill any process currently listening on the given local port.
+    /// This handles orphaned SSH processes left behind by a previous app crash.
+    fn kill_port_holder(port: u16) {
+        let output = Command::new("lsof")
+            .args(["-ti", &format!(":{port}")])
+            .output();
+        if let Ok(out) = output {
+            let pids = String::from_utf8_lossy(&out.stdout);
+            for pid_str in pids.split_whitespace() {
+                if pid_str.parse::<u32>().is_ok() {
+                    eprintln!("[ssh_tunnel] killing orphaned process {pid_str} on port {port}");
+                    let _ = Command::new("kill").arg(pid_str).output();
+                }
+            }
+        }
     }
 
     pub fn build_ssh_args(server: &ServerConfig) -> Vec<String> {
@@ -214,5 +238,101 @@ impl TunnelManager {
 impl Default for TunnelState {
     fn default() -> Self {
         Self::Disconnected
+    }
+}
+
+/// A separate SSH process for reverse-forwarding the CDP port.
+#[derive(Debug, Default)]
+pub struct CdpTunnel {
+    child: Option<Child>,
+}
+
+impl CdpTunnel {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Start a reverse SSH tunnel: remote_port on server -> local_port on Mac.
+    pub fn start(&mut self, server: &ServerConfig, cdp_local_port: u16, cdp_remote_port: u16) -> Result<(), String> {
+        self.stop();
+
+        // Test mode
+        if std::env::var("OPENCLAW_CONNECTOR_FAKE_TUNNEL").as_deref() == Ok("1") {
+            return Ok(());
+        }
+
+        // Resolve ~ in key path
+        let key_path = if let Some(rest) = server.key_path.strip_prefix("~/") {
+            match std::env::var("HOME") {
+                Ok(home) => format!("{home}/{rest}"),
+                Err(_) => server.key_path.clone(),
+            }
+        } else {
+            server.key_path.clone()
+        };
+
+        let child = Command::new("ssh")
+            .args([
+                "-N",
+                "-R", &format!("{cdp_remote_port}:127.0.0.1:{cdp_local_port}"),
+                "-o", "ExitOnForwardFailure=yes",
+                "-o", "BatchMode=yes",
+                "-o", "ConnectTimeout=4",
+                "-o", "ServerAliveInterval=20",
+                "-o", "ServerAliveCountMax=1",
+                "-o", "StrictHostKeyChecking=accept-new",
+                "-i", &key_path,
+                &format!("{}@{}", server.user, server.host),
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("failed to spawn CDP SSH tunnel: {e}"))?;
+
+        eprintln!("[ssh_tunnel] CDP reverse tunnel started: remote:{cdp_remote_port} -> local:{cdp_local_port}");
+        self.child = Some(child);
+
+        // Wait briefly to detect early failures
+        std::thread::sleep(Duration::from_secs(2));
+        if let Some(ref mut c) = self.child {
+            match c.try_wait() {
+                Ok(Some(status)) => {
+                    let mut stderr = String::new();
+                    if let Some(mut pipe) = c.stderr.take() {
+                        let _ = pipe.read_to_string(&mut stderr);
+                    }
+                    self.child = None;
+                    return Err(format!("CDP tunnel exited early ({status}): {}", stderr.trim()));
+                }
+                Ok(None) => {} // still running, good
+                Err(e) => {
+                    self.child = None;
+                    return Err(format!("CDP tunnel check failed: {e}"));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn stop(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            eprintln!("[ssh_tunnel] stopping CDP reverse tunnel");
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+
+    pub fn is_running(&mut self) -> bool {
+        if let Some(ref mut child) = self.child {
+            match child.try_wait() {
+                Ok(Some(_)) => { self.child = None; false }
+                Ok(None) => true,
+                Err(_) => { self.child = None; false }
+            }
+        } else {
+            false
+        }
     }
 }

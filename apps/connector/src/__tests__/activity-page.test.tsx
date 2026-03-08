@@ -1,31 +1,15 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { vi } from "vitest";
 import { ActivityPage } from "../pages/ActivityPage";
 
-const invokeMock = vi.fn((command: string) => {
-  if (command === "run_command") {
-    return Promise.resolve({
-      exitCode: 0,
-      stdout: "hello world",
-      stderr: "",
-      durationMs: 42
-    });
-  }
-  return Promise.resolve(undefined);
-});
-
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: (...args: unknown[]) => invokeMock(...args)
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(() => Promise.resolve(() => {}))
 }));
 
-test("execute button triggers run_command", async () => {
+test("activity page renders with empty state", () => {
   render(<ActivityPage />);
-
-  const commandInput = screen.getByLabelText("命令");
-  fireEvent.change(commandInput, { target: { value: "echo hello" } });
-  fireEvent.click(screen.getByRole("button", { name: "执行" }));
-
-  await waitFor(() => {
-    expect(invokeMock).toHaveBeenCalledWith("run_command", { command: "echo hello" });
-  });
+  expect(screen.getByText("活动")).toBeInTheDocument();
+  expect(
+    screen.getByText("暂无活动记录。连接 Gateway 后将显示任务日志。")
+  ).toBeInTheDocument();
 });

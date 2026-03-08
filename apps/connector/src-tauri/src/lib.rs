@@ -1,32 +1,40 @@
-pub mod bindings;
+pub mod browser;
 pub mod config;
-pub mod emergency;
+pub mod device_identity;
 pub mod executor;
 pub mod health;
 pub mod heartbeat;
 pub mod ssh_tunnel;
 pub mod tasks;
+pub mod ws_client;
 
-use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+use tokio::sync::mpsc;
 
 struct AppState {
     tunnel: Mutex<ssh_tunnel::TunnelManager>,
-    bindings: Mutex<bindings::BindingMap>,
-    task_loop: Mutex<tasks::TaskLoopControl>,
     heartbeat: Mutex<heartbeat::HeartbeatMonitor>,
+    /// Handle to cancel the background WebSocket loop.
+    ws_shutdown: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    ws_connected: Arc<Mutex<bool>>,
+    rpc_tx: Mutex<Option<mpsc::UnboundedSender<ws_client::RpcRequest>>>,
+    browser: Mutex<browser::BrowserManager>,
+    cdp_tunnel: Mutex<ssh_tunnel::CdpTunnel>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             tunnel: Mutex::new(ssh_tunnel::TunnelManager::new()),
-            bindings: Mutex::new(bindings::BindingMap::default()),
-            task_loop: Mutex::new(tasks::TaskLoopControl::new()),
             heartbeat: Mutex::new(heartbeat::HeartbeatMonitor::new(3)),
+            ws_shutdown: Mutex::new(None),
+            ws_connected: Arc::new(Mutex::new(false)),
+            rpc_tx: Mutex::new(None),
+            browser: Mutex::new(browser::BrowserManager::new()),
+            cdp_tunnel: Mutex::new(ssh_tunnel::CdpTunnel::new()),
         }
     }
 }
@@ -51,64 +59,219 @@ fn save_app_config(app_handle: tauri::AppHandle, cfg: config::AppConfig) -> Resu
     config::save_config(&path, &cfg)
 }
 
+/// Connect: establish SSH tunnel, then start WebSocket client in background.
 #[tauri::command]
-fn start_tunnel(
+fn connect(
+    app_handle: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     server: config::ServerConfig,
+    gateway_token: String,
+    node_id: String,
+    node_name: String,
 ) -> Result<ssh_tunnel::TunnelStatus, String> {
-    let mut tunnel = state
-        .tunnel
-        .lock()
-        .map_err(|_| "failed to acquire tunnel lock".to_string())?;
+    // Load or create device identity for node-host authentication
+    let identity_path = app_handle
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("failed to get app config dir: {e}"))?
+        .join("device-identity.json");
+    let identity = device_identity::load_or_create(&identity_path)?;
+    eprintln!("[connector] device identity: {}", identity.device_id);
 
-    eprintln!(
-        "[connector] start_tunnel host={} user={} local_port={} remote_port={}",
-        server.host, server.user, server.local_port, server.remote_port
-    );
-    match tunnel.start(server) {
-        Ok(()) => {
-            let status = tunnel.refresh_status();
-            eprintln!("[connector] start_tunnel success state={:?}", status.state);
-            if let Ok(mut hb) = state.heartbeat.lock() {
-                hb.record_sample(health::HeartbeatSample {
-                    latency_ms: 0,
-                    tunnel_connected: true,
-                    gateway_ok: true,
-                });
-            }
-            Ok(status)
-        }
-        Err(err) => {
-            eprintln!("[connector] start_tunnel failed: {err}");
-            if let Ok(mut hb) = state.heartbeat.lock() {
-                hb.record_failure();
-            }
-            Err(err)
+    // 0. Shutdown any previous WebSocket loop
+    if let Ok(mut ws_shutdown) = state.ws_shutdown.lock() {
+        if let Some(old) = ws_shutdown.take() {
+            let _ = old.send(());
         }
     }
-}
+    if let Ok(mut c) = state.ws_connected.lock() {
+        *c = false;
+    }
 
-#[tauri::command]
-fn stop_tunnel(state: tauri::State<'_, AppState>) -> Result<ssh_tunnel::TunnelStatus, String> {
+    // 1. Stop previous tunnel then start new one
     let mut tunnel = state
         .tunnel
         .lock()
         .map_err(|_| "failed to acquire tunnel lock".to_string())?;
 
-    eprintln!("[connector] stop_tunnel");
-    tunnel.stop()?;
+    // Always stop first to release the local port
+    let _ = tunnel.stop();
+
+    eprintln!(
+        "[connector] connect host={} user={} local_port={} remote_port={}",
+        server.host, server.user, server.local_port, server.remote_port
+    );
+
+    tunnel.start(server.clone())?;
     let status = tunnel.refresh_status();
-    eprintln!("[connector] stop_tunnel state={:?}", status.state);
+    eprintln!("[connector] tunnel connected state={:?}", status.state);
+
+    if let Ok(mut hb) = state.heartbeat.lock() {
+        hb.record_sample(health::HeartbeatSample {
+            latency_ms: 0,
+            tunnel_connected: true,
+            gateway_ok: false,
+        });
+    }
+
+    // 2. Start WebSocket client in background
+    let ws_url = ws_client::build_ws_url(server.local_port);
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+
+    // RPC channel for management calls (operator WebSocket)
+    let (rpc_tx, mut operator_rpc_rx) = mpsc::unbounded_channel::<ws_client::RpcRequest>();
+    if let Ok(mut stored_tx) = state.rpc_tx.lock() {
+        *stored_tx = Some(rpc_tx);
+    }
+
+    // Dummy RPC channel for node WebSocket (not used for management)
+    let (_dummy_tx, mut node_rpc_rx) = mpsc::unbounded_channel::<ws_client::RpcRequest>();
+
+    // Store shutdown handle
+    if let Ok(mut ws_shutdown) = state.ws_shutdown.lock() {
+        *ws_shutdown = Some(shutdown_tx);
+    }
+
+    let app = app_handle.clone();
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ws_client::NodeEvent>();
+
+    // Spawn event forwarder: NodeEvent → tauri::emit
+    let app_for_events = app_handle.clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = event_rx.recv().await {
+            let _ = app_for_events.emit("node-event", &event);
+        }
+    });
+
+    // Spawn operator WebSocket for management API calls
+    let operator_ws_url = ws_url.clone();
+    let operator_token = gateway_token.clone();
+    let local_port = server.local_port;
+    tauri::async_runtime::spawn(async move {
+        loop {
+            match ws_client::run_operator_loop(&operator_ws_url, local_port, &operator_token, &mut operator_rpc_rx).await {
+                Ok(()) => eprintln!("[connector] Operator WS closed normally"),
+                Err(e) => eprintln!("[connector] Operator WS error: {e}"),
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            eprintln!("[connector] Attempting operator WS reconnect...");
+        }
+    });
+
+    // Spawn node WebSocket loop with auto-reconnect
+    let ws_connected = Arc::clone(&app.state::<AppState>().ws_connected);
+    tauri::async_runtime::spawn(async move {
+        let mut shutdown_rx = shutdown_rx;
+        loop {
+            let event_tx_clone = event_tx.clone();
+            let ws_connected_clone = Arc::clone(&ws_connected);
+
+            let ws_future = ws_client::run_ws_loop(&ws_url, &gateway_token, &node_id, &node_name, &identity, event_tx_clone, &mut node_rpc_rx, ws_connected_clone);
+
+            tokio::select! {
+                result = ws_future => {
+                    if let Ok(mut connected) = ws_connected.lock() {
+                        *connected = false;
+                    }
+                    match result {
+                        Ok(()) => {
+                            eprintln!("[connector] WebSocket closed normally");
+                        }
+                        Err(e) => {
+                            eprintln!("[connector] WebSocket error: {e}");
+                        }
+                    }
+                    // Wait before reconnect
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                    eprintln!("[connector] Attempting WebSocket reconnect...");
+                }
+                _ = &mut shutdown_rx => {
+                    eprintln!("[connector] WebSocket shutdown requested");
+                    if let Ok(mut connected) = ws_connected.lock() {
+                        *connected = false;
+                    }
+                    break;
+                }
+            }
+        }
+    });
+
     Ok(status)
 }
 
+/// Disconnect: close WebSocket, then stop SSH tunnel.
 #[tauri::command]
-fn get_tunnel_status(state: tauri::State<'_, AppState>) -> Result<ssh_tunnel::TunnelStatus, String> {
+fn disconnect(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    // 1. Shutdown WebSocket
+    if let Ok(mut ws_shutdown) = state.ws_shutdown.lock() {
+        if let Some(tx) = ws_shutdown.take() {
+            let _ = tx.send(());
+        }
+    }
+    if let Ok(mut connected) = state.ws_connected.lock() {
+        *connected = false;
+    }
+
+    // Clear RPC channel
+    if let Ok(mut rpc_tx) = state.rpc_tx.lock() {
+        *rpc_tx = None;
+    }
+
+    // Stop CDP tunnel and browser
+    if let Ok(mut cdp_tunnel) = state.cdp_tunnel.lock() {
+        cdp_tunnel.stop();
+    }
+    if let Ok(mut browser) = state.browser.lock() {
+        let _ = browser.stop();
+    }
+
+    // 2. Stop SSH tunnel
     let mut tunnel = state
         .tunnel
         .lock()
         .map_err(|_| "failed to acquire tunnel lock".to_string())?;
-    Ok(tunnel.refresh_status())
+
+    eprintln!("[connector] disconnect");
+    tunnel.stop()?;
+
+    if let Ok(mut hb) = state.heartbeat.lock() {
+        hb.record_failure();
+    }
+
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConnectionStatusResponse {
+    tunnel_state: ssh_tunnel::TunnelState,
+    tunnel_reconnect_attempts: u32,
+    tunnel_last_error: Option<String>,
+    ws_connected: bool,
+}
+
+#[tauri::command]
+fn get_connection_status(
+    state: tauri::State<'_, AppState>,
+) -> Result<ConnectionStatusResponse, String> {
+    let mut tunnel = state
+        .tunnel
+        .lock()
+        .map_err(|_| "failed to acquire tunnel lock".to_string())?;
+    let tunnel_status = tunnel.refresh_status();
+
+    let ws_connected = state
+        .ws_connected
+        .lock()
+        .map(|v| *v)
+        .unwrap_or(false);
+
+    Ok(ConnectionStatusResponse {
+        tunnel_state: tunnel_status.state,
+        tunnel_reconnect_attempts: tunnel_status.reconnect_attempts,
+        tunnel_last_error: tunnel_status.last_error,
+        ws_connected,
+    })
 }
 
 #[derive(serde::Serialize)]
@@ -126,106 +289,192 @@ fn get_health_summary(state: tauri::State<'_, AppState>) -> Result<HealthSummary
         .tunnel
         .lock()
         .map_err(|_| "failed to acquire tunnel lock".to_string())?;
-    let heartbeat = state
+    let mut heartbeat = state
         .heartbeat
         .lock()
         .map_err(|_| "failed to acquire heartbeat lock".to_string())?;
 
     let status = tunnel.refresh_status();
-    let connected = status.state == ssh_tunnel::TunnelState::Connected;
+    let tunnel_connected = status.state == ssh_tunnel::TunnelState::Connected;
+
+    let ws_connected = state
+        .ws_connected
+        .lock()
+        .map(|v| *v)
+        .unwrap_or(false);
+
+    // Sync heartbeat with actual connection state so stale failures get cleared
+    heartbeat.record_sample(health::HeartbeatSample {
+        latency_ms: 0,
+        tunnel_connected,
+        gateway_ok: ws_connected,
+    });
 
     Ok(HealthSummaryResponse {
         latency_ms: 0,
-        tunnel_connected: connected,
-        gateway_ok: connected,
+        tunnel_connected,
+        gateway_ok: ws_connected,
         consecutive_failures: heartbeat.consecutive_failures(),
     })
 }
 
+async fn send_gateway_rpc(
+    rpc_tx: mpsc::UnboundedSender<ws_client::RpcRequest>,
+    method: &str,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let id = format!("rpc-{}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis());
+
+    let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+
+    rpc_tx.send(ws_client::RpcRequest {
+        id,
+        method: method.to_string(),
+        params,
+        response_tx,
+    }).map_err(|_| "WebSocket not connected".to_string())?;
+
+    response_rx.await
+        .map_err(|_| "RPC response channel closed".to_string())?
+}
+
 #[tauri::command]
-fn set_agent_binding(
+async fn list_agents(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let rpc_tx = {
+        let guard = state.rpc_tx.lock().map_err(|_| "lock error".to_string())?;
+        guard.clone().ok_or_else(|| "not connected".to_string())?
+    };
+    send_gateway_rpc(rpc_tx, "agents.list", serde_json::json!({})).await
+}
+
+#[tauri::command]
+async fn list_sessions(
     state: tauri::State<'_, AppState>,
     agent_id: String,
-    node_id: String,
-) -> Result<(), String> {
-    state
-        .bindings
-        .lock()
-        .map_err(|_| "failed to acquire bindings lock".to_string())?
-        .set(agent_id, node_id);
-    Ok(())
+) -> Result<serde_json::Value, String> {
+    let rpc_tx = {
+        let guard = state.rpc_tx.lock().map_err(|_| "lock error".to_string())?;
+        guard.clone().ok_or_else(|| "not connected".to_string())?
+    };
+    send_gateway_rpc(rpc_tx, "sessions.list", serde_json::json!({ "agentId": agent_id })).await
 }
 
 #[tauri::command]
-fn remove_agent_binding(state: tauri::State<'_, AppState>, agent_id: String) -> Result<(), String> {
-    state
-        .bindings
-        .lock()
-        .map_err(|_| "failed to acquire bindings lock".to_string())?
-        .remove(&agent_id);
-    Ok(())
-}
-
-#[tauri::command]
-fn list_agent_bindings(state: tauri::State<'_, AppState>) -> Result<HashMap<String, String>, String> {
-    let map = state
-        .bindings
-        .lock()
-        .map_err(|_| "failed to acquire bindings lock".to_string())?
-        .all();
-    Ok(map)
-}
-
-#[tauri::command]
-fn execute_task(
+async fn inject_message(
     state: tauri::State<'_, AppState>,
-    local_node_id: String,
-    task: tasks::IncomingTask,
-) -> Result<executor::TaskExecutionOutput, String> {
-    let bindings = state
-        .bindings
-        .lock()
-        .map_err(|_| "failed to acquire bindings lock".to_string())?
-        .clone();
+    session_key: String,
+    content: String,
+) -> Result<serde_json::Value, String> {
+    let rpc_tx = {
+        let guard = state.rpc_tx.lock().map_err(|_| "lock error".to_string())?;
+        guard.clone().ok_or_else(|| "not connected".to_string())?
+    };
+    send_gateway_rpc(rpc_tx, "chat.inject", serde_json::json!({
+        "sessionKey": session_key,
+        "message": content,
+    })).await
+}
 
-    let router = tasks::TaskRouter::new(local_node_id);
-    if !router.should_execute(&task, &bindings) {
-        return Err(format!(
-            "task {} ignored because agent {} is not bound to this node",
-            task.task_id, task.agent_id
-        ));
+#[tauri::command]
+async fn get_chat_history(
+    state: tauri::State<'_, AppState>,
+    session_key: String,
+    limit: Option<u32>,
+) -> Result<serde_json::Value, String> {
+    let rpc_tx = {
+        let guard = state.rpc_tx.lock().map_err(|_| "lock error".to_string())?;
+        guard.clone().ok_or_else(|| "not connected".to_string())?
+    };
+    let mut params = serde_json::json!({ "sessionKey": session_key });
+    if let Some(l) = limit {
+        params["limit"] = serde_json::json!(l);
+    }
+    send_gateway_rpc(rpc_tx, "chat.history", params).await
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BrowserStatusResponse {
+    running: bool,
+    cdp_port: u16,
+    cdp_remote_port: u16,
+    tunnel_running: bool,
+    pid: Option<u32>,
+}
+
+#[tauri::command]
+fn start_browser(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    cdp_port: Option<u16>,
+    cdp_remote_port: Option<u16>,
+) -> Result<BrowserStatusResponse, String> {
+    let cdp_port = cdp_port.unwrap_or(9222);
+    let cdp_remote_port = cdp_remote_port.unwrap_or(19222);
+
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to get app data dir: {e}"))?
+        .join("chrome-cdp");
+
+    let mut browser = state.browser.lock().map_err(|_| "browser lock error".to_string())?;
+    browser.start(cdp_port, &data_dir)?;
+
+    let tunnel_mgr = state.tunnel.lock().map_err(|_| "tunnel lock error".to_string())?;
+    let mut cdp_tunnel = state.cdp_tunnel.lock().map_err(|_| "cdp tunnel lock error".to_string())?;
+
+    if let Some(server) = tunnel_mgr.active_server() {
+        if let Err(e) = cdp_tunnel.start(&server, cdp_port, cdp_remote_port) {
+            eprintln!("[browser] CDP tunnel failed: {e}");
+        }
+    } else {
+        eprintln!("[browser] no active SSH connection, skipping CDP tunnel");
     }
 
-    let executor = executor::TaskExecutor::new();
-    executor.execute(&task)
-}
-
-/// MVP simplified command: run a shell command directly, no binding check.
-#[tauri::command]
-fn run_command(command: String) -> Result<executor::TaskExecutionOutput, String> {
-    let task = tasks::IncomingTask {
-        task_id: String::new(),
-        agent_id: String::new(),
-        action: "system.run".to_string(),
-        args: serde_json::json!({ "command": command }),
-        timeout_sec: 30,
-    };
-    let executor = executor::TaskExecutor::new();
-    executor.execute(&task)
+    let bs = browser.status();
+    Ok(BrowserStatusResponse {
+        running: bs.running,
+        cdp_port: bs.cdp_port,
+        cdp_remote_port,
+        tunnel_running: cdp_tunnel.is_running(),
+        pid: bs.pid,
+    })
 }
 
 #[tauri::command]
-fn emergency_disconnect(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let mut tunnel = state
-        .tunnel
-        .lock()
-        .map_err(|_| "failed to acquire tunnel lock".to_string())?;
-    let mut task_loop = state
-        .task_loop
-        .lock()
-        .map_err(|_| "failed to acquire task loop lock".to_string())?;
+fn stop_browser(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    if let Ok(mut cdp_tunnel) = state.cdp_tunnel.lock() {
+        cdp_tunnel.stop();
+    }
+    let mut browser = state.browser.lock().map_err(|_| "browser lock error".to_string())?;
+    browser.stop()
+}
 
-    emergency::emergency_disconnect_internal(&mut tunnel, &mut task_loop)
+#[tauri::command]
+fn get_browser_status(state: tauri::State<'_, AppState>) -> Result<BrowserStatusResponse, String> {
+    let mut browser = state.browser.lock().map_err(|_| "browser lock error".to_string())?;
+    let mut cdp_tunnel = state.cdp_tunnel.lock().map_err(|_| "cdp tunnel lock error".to_string())?;
+    let bs = browser.status();
+    Ok(BrowserStatusResponse {
+        running: bs.running,
+        cdp_port: bs.cdp_port,
+        cdp_remote_port: 0,
+        tunnel_running: cdp_tunnel.is_running(),
+        pid: bs.pid,
+    })
+}
+
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg(&url)
+        .spawn()
+        .map_err(|e| format!("failed to open URL: {e}"))?;
+    Ok(())
 }
 
 pub fn run() {
@@ -234,16 +483,18 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_app_config,
             save_app_config,
-            start_tunnel,
-            stop_tunnel,
-            get_tunnel_status,
+            connect,
+            disconnect,
+            get_connection_status,
             get_health_summary,
-            set_agent_binding,
-            remove_agent_binding,
-            list_agent_bindings,
-            execute_task,
-            run_command,
-            emergency_disconnect
+            open_url,
+            list_agents,
+            list_sessions,
+            inject_message,
+            get_chat_history,
+            start_browser,
+            stop_browser,
+            get_browser_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

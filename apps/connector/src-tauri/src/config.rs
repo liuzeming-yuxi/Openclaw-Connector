@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,6 +26,32 @@ pub struct AppConfig {
     pub server: ServerConfig,
     pub runtime: RuntimeConfig,
     pub global_allow: bool,
+    #[serde(default)]
+    pub gateway_token: String,
+    #[serde(default = "generate_node_id")]
+    pub node_id: String,
+    #[serde(default = "default_node_name")]
+    pub node_name: String,
+    #[serde(default = "default_cdp_port")]
+    pub cdp_port: u16,
+    #[serde(default = "default_cdp_remote_port")]
+    pub cdp_remote_port: u16,
+}
+
+fn generate_node_id() -> String {
+    Uuid::new_v4().to_string()
+}
+
+fn default_node_name() -> String {
+    "OpenClaw Connector (macOS)".to_string()
+}
+
+fn default_cdp_port() -> u16 {
+    9222
+}
+
+fn default_cdp_remote_port() -> u16 {
+    19222
 }
 
 impl Default for AppConfig {
@@ -42,6 +69,11 @@ impl Default for AppConfig {
                 reconnect_interval_sec: 5,
             },
             global_allow: true,
+            gateway_token: String::new(),
+            node_id: generate_node_id(),
+            node_name: default_node_name(),
+            cdp_port: default_cdp_port(),
+            cdp_remote_port: default_cdp_remote_port(),
         }
     }
 }

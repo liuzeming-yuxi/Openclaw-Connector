@@ -15,6 +15,11 @@ export interface ConnectorConfig {
   server: ServerConfig;
   runtime: RuntimeConfig;
   globalAllow: boolean;
+  gatewayToken: string;
+  nodeId: string;
+  nodeName: string;
+  cdpPort: number;
+  cdpRemotePort: number;
 }
 
 export function createDefaultConfig(): ConnectorConfig {
@@ -30,6 +35,11 @@ export function createDefaultConfig(): ConnectorConfig {
       heartbeatIntervalSec: 15,
       reconnectIntervalSec: 5
     },
-    globalAllow: true
+    globalAllow: true,
+    gatewayToken: "",
+    nodeId: crypto.randomUUID(),
+    nodeName: "OpenClaw Connector (macOS)",
+    cdpPort: 9222,
+    cdpRemotePort: 19222
   };
 }
