@@ -44,7 +44,7 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
-`.dmg` 安装包会生成在 `src-tauri/target/release/bundle/dmg/` 目录下。
+`.app` 应用包会生成在 `src-tauri/target/release/bundle/macos/` 目录下。
 
 ## 技术栈
 

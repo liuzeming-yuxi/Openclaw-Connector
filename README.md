@@ -44,7 +44,7 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
-The `.dmg` installer will be generated in `src-tauri/target/release/bundle/dmg/`.
+The `.app` bundle will be generated in `src-tauri/target/release/bundle/macos/`.
 
 ## Tech Stack
 
