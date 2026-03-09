@@ -16,12 +16,18 @@ pub struct BrowserManager {
     cdp_port: u16,
 }
 
-impl BrowserManager {
-    pub fn new() -> Self {
+impl Default for BrowserManager {
+    fn default() -> Self {
         Self {
             child: None,
             cdp_port: 9222,
         }
+    }
+}
+
+impl BrowserManager {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Locate a Chrome-compatible binary on macOS.

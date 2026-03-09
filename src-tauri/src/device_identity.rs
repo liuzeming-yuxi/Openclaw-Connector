@@ -107,6 +107,7 @@ pub fn public_key_raw_base64url(public_key_pem: &str) -> Result<String, String> 
 }
 
 /// Build the V3 device auth payload string.
+#[allow(clippy::too_many_arguments)]
 pub fn build_auth_payload_v3(
     device_id: &str,
     client_id: &str,

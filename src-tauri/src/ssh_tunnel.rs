@@ -4,9 +4,10 @@ use std::io::Read;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TunnelState {
+    #[default]
     Disconnected,
     Connecting,
     Connected,
@@ -222,11 +223,6 @@ impl TunnelManager {
     }
 }
 
-impl Default for TunnelState {
-    fn default() -> Self {
-        Self::Disconnected
-    }
-}
 
 /// Check whether a TCP port is already in use by attempting to bind.
 pub fn is_port_in_use(port: u16) -> bool {

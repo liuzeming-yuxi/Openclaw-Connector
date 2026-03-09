@@ -60,6 +60,7 @@ pub struct RpcRequest {
 }
 
 /// Connect to the Gateway WebSocket and run the Node Host message loop.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_ws_loop(
     ws_url: &str,
     gateway_token: &str,
@@ -140,7 +141,7 @@ pub async fn run_ws_loop(
                                     eprintln!("[ws_client] received connect.challenge, sending auth as node-host...");
                                     let connect_req = build_connect_request(gateway_token, node_id, node_name, identity, &nonce);
                                     connect_req_id = connect_req.get("id").and_then(|v| v.as_str()).map(String::from);
-                                    if let Err(e) = write.send(Message::Text(connect_req.to_string().into())).await {
+                                    if let Err(e) = write.send(Message::Text(connect_req.to_string())).await {
                                         let _ = event_tx.send(NodeEvent::Error {
                                             message: format!("failed to send connect: {e}"),
                                         });
@@ -191,7 +192,7 @@ pub async fn run_ws_loop(
                                             "params": result_params,
                                         });
 
-                                        if let Err(e) = write.send(Message::Text(result_req.to_string().into())).await {
+                                        if let Err(e) = write.send(Message::Text(result_req.to_string())).await {
                                             let _ = event_tx.send(NodeEvent::Error {
                                                 message: format!("WebSocket write error: {e}"),
                                             });
@@ -268,7 +269,7 @@ pub async fn run_ws_loop(
                             "method": req.method,
                             "params": req.params,
                         });
-                        if let Err(e) = write.send(Message::Text(rpc_msg.to_string().into())).await {
+                        if let Err(e) = write.send(Message::Text(rpc_msg.to_string())).await {
                             let _ = req.response_tx.send(Err(format!("WebSocket write error: {e}")));
                         } else {
                             pending_rpcs.insert(req.id, req.response_tx);
@@ -596,7 +597,7 @@ pub async fn run_operator_loop(
                                     });
 
                                     eprintln!("[operator_ws] sending operator auth...");
-                                    let _ = write.send(Message::Text(connect_req.to_string().into())).await;
+                                    let _ = write.send(Message::Text(connect_req.to_string())).await;
                                 }
                             }
                             "res" => {
@@ -660,7 +661,7 @@ pub async fn run_operator_loop(
                         "method": req.method,
                         "params": req.params,
                     });
-                    if let Err(e) = write.send(Message::Text(outgoing.to_string().into())).await {
+                    if let Err(e) = write.send(Message::Text(outgoing.to_string())).await {
                         let _ = req.response_tx.send(Err(format!("write error: {e}")));
                     } else {
                         pending_rpcs.insert(req.id, req.response_tx);
