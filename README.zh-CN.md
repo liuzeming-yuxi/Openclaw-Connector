@@ -6,6 +6,16 @@
 
 ![截图](docs/images/screenshot.png)
 
+## 为什么需要 OpenClaw Connector？
+
+ChatGPT、Claude 等 AI Agent 运行在云端服务器上，但用户经常需要它们与**本地环境**交互：执行命令、控制浏览器、访问本地文件。
+
+OpenClaw Connector 解决两个核心问题：
+
+1. **桥接云端与本地** — 通过安全隧道连接云端 AI Agent 和你的本地机器，让 Agent 能像坐在你旁边一样操作你的电脑。
+
+2. **安全访问网关** — 服务器上的 OpenClaw 网关不应该暴露在公网上。这个应用通过加密 SSH 隧道让你在本地安全访问远端网关——无需开放端口，无需公网地址。
+
 ## 功能特性
 
 - **SSH 隧道** — 安全的反向隧道连接到 Linux 网关，支持自动重连
@@ -45,6 +55,8 @@ pnpm tauri build
 ```
 
 `.app` 应用包会生成在 `src-tauri/target/release/bundle/macos/` 目录下。
+
+> **第一次使用？** 请查看[使用指南](docs/guide.zh-CN.md)，里面有详细的配置说明和参数解释。
 
 ## 技术栈
 

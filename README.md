@@ -6,6 +6,16 @@ A macOS desktop app that connects your local machine to [OpenClaw](https://githu
 
 ![Screenshot](docs/images/screenshot.png)
 
+## Why OpenClaw Connector?
+
+AI agents like ChatGPT, Claude, and custom LLM agents run on cloud servers — but users often need them to interact with their **local environment**: running commands, controlling browsers, accessing local files.
+
+OpenClaw Connector solves two problems:
+
+1. **Bridging cloud and local** — It creates a secure tunnel between your cloud-hosted AI agents and your local machine, so agents can execute tasks on your computer as if they were sitting next to you.
+
+2. **Secure gateway access** — The OpenClaw gateway on your server should never be exposed to the public internet. This app lets you access it securely from your local machine through an encrypted SSH tunnel — no open ports, no public URLs.
+
 ## Features
 
 - **SSH Tunnel** — Secure reverse tunnel to your Linux gateway with auto-reconnect
@@ -45,6 +55,8 @@ pnpm tauri build
 ```
 
 The `.app` bundle will be generated in `src-tauri/target/release/bundle/macos/`.
+
+> **New to OpenClaw?** See the [User Guide](docs/guide.md) for detailed setup instructions and parameter explanations.
 
 ## Tech Stack
 
