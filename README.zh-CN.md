@@ -114,6 +114,11 @@ pnpm build
 - [ ] OpenClaw 健康检查及自动修复
 - [ ] 更多浏览器的自动化支持（Firefox、Edge 等）
 - [ ] 完善的 CI/CD 构建流程
+- [ ] PR 级别的 CI 检查（lint、test、clippy）
+- [ ] 架构 / 时序图
+- [ ] 更安全的端口管理（避免误杀无关进程）
+- [ ] Operator WebSocket 断连时优雅关闭
+- [ ] 统一配置源（前端 vs 后端配置同步）
 
 ## Star History
 
