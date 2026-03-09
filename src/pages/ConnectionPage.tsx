@@ -271,9 +271,6 @@ export function ConnectionPage() {
       await invoke("connect", { server, gatewayToken, nodeId: config.nodeId, nodeName });
       pushActivity("info", "SSH 隧道已连接，WebSocket 正在建立...");
       patchConfig({ server, gatewayToken, nodeName });
-      await invoke("save_app_config", {
-        cfg: { ...config, server, gatewayToken, nodeName }
-      }).catch(() => {});
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
@@ -336,9 +333,6 @@ export function ConnectionPage() {
       setBrowserTunnelRunning(result.tunnelRunning);
       pushActivity("info", `Chrome 已启动，CDP 端口 ${cdpPort}，远程映射 ${cdpRemotePort}`);
       patchConfig({ cdpPort, cdpRemotePort });
-      await invoke("save_app_config", {
-        cfg: { ...config, cdpPort, cdpRemotePort },
-      }).catch(() => {});
     } catch (err) {
       pushActivity("error", `启动浏览器失败：${err instanceof Error ? err.message : String(err)}`);
     } finally {

@@ -9,11 +9,16 @@ export default function App() {
   const setConfig = useConfigStore((s) => s.setConfig);
 
   useEffect(() => {
+    // Clear leftover localStorage from previous versions
+    localStorage.removeItem("openclaw-connector-config");
+
     invoke("load_app_config")
       .then((cfg) => {
         if (cfg) setConfig(cfg as ConnectorConfig);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn("[config] failed to load from backend, using defaults:", err);
+      });
   }, [setConfig]);
 
   return (
