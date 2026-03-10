@@ -9,7 +9,7 @@ pub mod tasks;
 pub mod ws_client;
 
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex};
 
 use tauri::{Emitter, Manager};
@@ -20,6 +20,7 @@ struct AppState {
     heartbeat: Mutex<heartbeat::HeartbeatMonitor>,
     ws_shutdown: Arc<AtomicBool>,
     ws_connected: Arc<Mutex<bool>>,
+    ws_latency_ms: Arc<AtomicU64>,
     rpc_tx: Mutex<Option<mpsc::UnboundedSender<ws_client::RpcRequest>>>,
     browser: Mutex<browser::BrowserManager>,
     cdp_tunnel: Mutex<ssh_tunnel::CdpTunnel>,
@@ -32,6 +33,7 @@ impl Default for AppState {
             heartbeat: Mutex::new(heartbeat::HeartbeatMonitor::new(3)),
             ws_shutdown: Arc::new(AtomicBool::new(false)),
             ws_connected: Arc::new(Mutex::new(false)),
+            ws_latency_ms: Arc::new(AtomicU64::new(0)),
             rpc_tx: Mutex::new(None),
             browser: Mutex::new(browser::BrowserManager::new()),
             cdp_tunnel: Mutex::new(ssh_tunnel::CdpTunnel::new()),
@@ -174,6 +176,7 @@ fn connect(
 
     // Spawn node WebSocket loop with auto-reconnect
     let ws_connected = Arc::clone(&app.state::<AppState>().ws_connected);
+    let ws_latency = Arc::clone(&app.state::<AppState>().ws_latency_ms);
     let node_shutdown = Arc::clone(&state.ws_shutdown);
     tauri::async_runtime::spawn(async move {
         loop {
@@ -187,6 +190,7 @@ fn connect(
                 &ws_url, &gateway_token, &node_id, &node_name, &identity,
                 event_tx_clone, &mut node_rpc_rx, ws_connected_clone,
                 Arc::clone(&node_shutdown),
+                Arc::clone(&ws_latency),
             ).await;
 
             if let Ok(mut connected) = ws_connected.lock() {
@@ -307,15 +311,17 @@ fn get_health_summary(state: tauri::State<'_, AppState>) -> Result<HealthSummary
         .map(|v| *v)
         .unwrap_or(false);
 
+    let latency_ms = state.ws_latency_ms.load(std::sync::atomic::Ordering::Relaxed);
+
     // Sync heartbeat with actual connection state so stale failures get cleared
     heartbeat.record_sample(health::HeartbeatSample {
-        latency_ms: 0,
+        latency_ms,
         tunnel_connected,
         gateway_ok: ws_connected,
     });
 
     Ok(HealthSummaryResponse {
-        latency_ms: 0,
+        latency_ms,
         tunnel_connected,
         gateway_ok: ws_connected,
         consecutive_failures: heartbeat.consecutive_failures(),

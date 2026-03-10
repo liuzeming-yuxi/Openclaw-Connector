@@ -71,6 +71,7 @@ pub async fn run_ws_loop(
     rpc_rx: &mut mpsc::UnboundedReceiver<RpcRequest>,
     ws_connected: Arc<Mutex<bool>>,
     shutdown: Arc<std::sync::atomic::AtomicBool>,
+    latency: Arc<std::sync::atomic::AtomicU64>,
 ) -> Result<(), String> {
     let (ws_stream, _response) = tokio_tungstenite::connect_async(ws_url)
         .await
@@ -86,11 +87,19 @@ pub async fn run_ws_loop(
 
     let mut pending_rpcs: HashMap<String, tokio::sync::oneshot::Sender<Result<serde_json::Value, String>>> = HashMap::new();
 
+    let mut ping_interval = tokio::time::interval(std::time::Duration::from_secs(15));
+    ping_interval.tick().await; // skip immediate first tick
+    let mut ping_sent_at: Option<tokio::time::Instant> = None;
+
     loop {
         tokio::select! {
             _ = tokio::time::sleep(std::time::Duration::from_millis(100)), if shutdown.load(std::sync::atomic::Ordering::Relaxed) => {
                 eprintln!("[ws_client] shutdown flag detected");
                 break;
+            }
+            _ = ping_interval.tick(), if authenticated => {
+                ping_sent_at = Some(tokio::time::Instant::now());
+                let _ = write.send(Message::Ping(vec![0x01])).await;
             }
             msg_opt = read.next() => {
                 let msg_result = match msg_opt {
@@ -256,6 +265,12 @@ pub async fn run_ws_loop(
                     }
                     Message::Ping(data) => {
                         let _ = write.send(Message::Pong(data)).await;
+                    }
+                    Message::Pong(_) => {
+                        if let Some(sent) = ping_sent_at.take() {
+                            let rtt = sent.elapsed().as_millis() as u64;
+                            latency.store(rtt, std::sync::atomic::Ordering::Relaxed);
+                        }
                     }
                     _ => {}
                 }
