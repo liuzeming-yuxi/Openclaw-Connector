@@ -10,7 +10,7 @@ type ThemeState = {
 
 function getEffectiveTheme(theme: Theme): "light" | "dark" {
   if (theme === "system") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
+    return typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches
       ? "dark"
       : "light";
   }
@@ -41,7 +41,9 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
   },
 }));
 
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-  const { theme } = useThemeStore.getState();
-  if (theme === "system") applyTheme(theme);
-});
+if (typeof window !== "undefined" && window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    const { theme } = useThemeStore.getState();
+    if (theme === "system") applyTheme(theme);
+  });
+}

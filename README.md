@@ -146,8 +146,8 @@ pnpm build
 
 - [ ] Cross-platform support (Windows & Linux)
 - [ ] Multi-language UI (i18n)
-- [ ] Theme switching (Light / Dark mode)
-- [ ] OpenClaw health check & auto-repair
+- [x] Theme switching (Light / Dark mode)
+- [x] OpenClaw health check & auto-repair
 - [ ] Browser automation beyond Chrome (Firefox, Edge, etc.)
 - [ ] Comprehensive CI/CD pipeline
 - [x] PR-level CI checks (lint, test, clippy)

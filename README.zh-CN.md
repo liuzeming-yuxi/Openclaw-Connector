@@ -146,8 +146,8 @@ pnpm build
 
 - [ ] 更好的全平台支持（Windows & Linux）
 - [ ] 多语言支持（i18n）
-- [ ] 主题切换（白天 / 黑夜模式）
-- [ ] OpenClaw 健康检查及自动修复
+- [x] 主题切换（白天 / 黑夜模式）
+- [x] OpenClaw 健康检查及自动修复
 - [ ] 更多浏览器的自动化支持（Firefox、Edge 等）
 - [ ] 完善的 CI/CD 构建流程
 - [x] PR 级别的 CI 检查（lint、test、clippy）
