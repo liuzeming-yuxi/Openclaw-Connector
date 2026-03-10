@@ -9,11 +9,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantStyles: Record<ButtonVariant, string> = {
-  default: "bg-emerald-600 text-white hover:bg-emerald-500 border-emerald-500",
-  destructive: "bg-red-600 text-white hover:bg-red-500 border-red-500",
-  outline: "border bg-transparent hover:bg-slate-800",
-  secondary: "bg-slate-700 text-slate-200 hover:bg-slate-600 border-slate-600",
-  ghost: "bg-transparent hover:bg-slate-800 border-transparent",
+  default: "bg-primary text-primary-foreground hover:bg-primary/90 border-primary/50",
+  destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 border-destructive/50",
+  outline: "border border-border bg-transparent hover:bg-muted",
+  secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80 border-border",
+  ghost: "bg-transparent hover:bg-muted border-transparent",
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -27,7 +27,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className = "", variant = "default", size = "default", ...props }, ref) => (
     <button
       ref={ref}
-      className={`inline-flex items-center justify-center rounded-lg border font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:pointer-events-none disabled:opacity-50 cursor-pointer ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-lg border font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 cursor-pointer ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       {...props}
     />
   )

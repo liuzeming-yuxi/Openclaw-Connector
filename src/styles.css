@@ -85,25 +85,25 @@
 /* Custom Utilities based on ui-ux-pro-max guidelines */
 @layer utilities {
   .glass-card {
-    @apply bg-slate-800/80 backdrop-blur-md border border-slate-700/50 shadow-xl;
+    @apply bg-card/80 backdrop-blur-md border border-border shadow-xl;
   }
   .input-base {
-    @apply h-10 w-full rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2 text-sm text-slate-100 transition-colors focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50;
   }
   .label-base {
-    @apply block text-sm font-medium text-slate-300 mb-1.5;
+    @apply block text-sm font-medium text-muted-foreground mb-1.5;
   }
   .btn-base {
-    @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 cursor-pointer;
+    @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 cursor-pointer;
   }
   .btn-primary {
-    @apply bg-emerald-600 text-white hover:bg-emerald-500 shadow-sm border border-emerald-500/50;
+    @apply bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm border border-primary/50;
   }
   .btn-secondary {
-    @apply bg-slate-800 text-slate-100 hover:bg-slate-700 border border-slate-700;
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border;
   }
   .btn-danger {
-    @apply bg-red-900/50 text-red-100 hover:bg-red-900/80 border border-red-800;
+    @apply bg-destructive/50 text-destructive-foreground hover:bg-destructive/80 border border-destructive/60;
   }
   .status-dot {
     @apply w-2 h-2 rounded-full;

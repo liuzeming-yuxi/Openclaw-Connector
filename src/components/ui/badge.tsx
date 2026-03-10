@@ -7,10 +7,10 @@ interface BadgeProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  default: "bg-emerald-600 text-white border-emerald-500",
-  secondary: "bg-slate-700 text-slate-200 border-slate-600",
-  destructive: "bg-red-600 text-white border-red-500",
-  outline: "bg-transparent text-slate-300 border-slate-600",
+  default: "bg-primary text-primary-foreground border-primary/50",
+  secondary: "bg-secondary text-secondary-foreground border-border",
+  destructive: "bg-destructive text-destructive-foreground border-destructive/50",
+  outline: "bg-transparent text-foreground/80 border-border",
 };
 
 export const Badge = forwardRef<HTMLDivElement, BadgeProps>(

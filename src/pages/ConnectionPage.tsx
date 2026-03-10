@@ -392,12 +392,12 @@ export function ConnectionPage() {
         <Card className="glass-card">
           <CardHeader>
             <CardTitle>
-              <Server className="w-5 h-5 text-emerald-400" />
+              <Server className="w-5 h-5 text-primary" />
               隧道连接
             </CardTitle>
-            <div className="flex items-center gap-2 bg-slate-900/80 border border-slate-700 rounded-full px-3 py-1 font-mono text-xs">
+            <div className="flex items-center gap-2 bg-background/80 border border-border rounded-full px-3 py-1 font-mono text-xs">
               <span className={statusClass} />
-              <span className="text-slate-200">{statusText}</span>
+              <span className="text-foreground">{statusText}</span>
             </div>
           </CardHeader>
           <CardContent>
@@ -469,7 +469,7 @@ export function ConnectionPage() {
                 {busy ? "处理中..." : (fullyConnected ? "重新连接" : "连接网关")}
               </Button>
               
-              <Button onClick={doDisconnect} disabled={busy || (!isConnected && status.tunnelState === "disconnected")} variant="outline" className="border-red-900/50 hover:bg-red-900/20 text-red-200 hover:text-red-100">
+              <Button onClick={doDisconnect} disabled={busy || (!isConnected && status.tunnelState === "disconnected")} variant="outline" className="border-destructive/50 hover:bg-destructive/10 text-destructive hover:text-destructive">
                 <Unplug className="w-4 h-4 mr-2" />
                 断开
               </Button>
@@ -483,13 +483,13 @@ export function ConnectionPage() {
             </div>
 
             {status.tunnelLastError && (
-              <div className="mt-4 flex items-start gap-2 text-sm text-red-400 bg-red-950/30 p-3 rounded-lg border border-red-900/50">
+              <div className="mt-4 flex items-start gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/30">
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 <p>最近错误：{status.tunnelLastError}</p>
               </div>
             )}
             {error && (
-              <div className="mt-4 flex items-start gap-2 text-sm text-red-400 bg-red-950/30 p-3 rounded-lg border border-red-900/50">
+              <div className="mt-4 flex items-start gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/30">
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 <div className="flex-1">
                   <p>{error}</p>
@@ -497,7 +497,7 @@ export function ConnectionPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="mt-2 h-7 text-xs border-red-800 text-red-300 hover:bg-red-900/40 hover:text-red-100"
+                      className="mt-2 h-7 text-xs border-destructive/50 text-destructive hover:bg-destructive/20"
                       disabled={busy}
                       onClick={() => connect(true)}
                     >
@@ -518,9 +518,9 @@ export function ConnectionPage() {
                 <Chrome className="w-5 h-5 text-blue-400" />
                 浏览器自动化
               </CardTitle>
-              <div className="flex items-center gap-2 bg-slate-900/80 border border-slate-700 rounded-full px-3 py-1 font-mono text-xs">
+              <div className="flex items-center gap-2 bg-background/80 border border-border rounded-full px-3 py-1 font-mono text-xs">
                 <span className={browserRunning && browserTunnelRunning ? "status-dot status-dot-online" : browserRunning ? "status-dot status-dot-pending" : "status-dot status-dot-offline"} />
-                <span className="text-slate-200">
+                <span className="text-foreground">
                   {browserRunning && browserTunnelRunning ? "隧道就绪" : browserRunning ? "运行中" : "未启动"}
                 </span>
               </div>
@@ -562,10 +562,10 @@ export function ConnectionPage() {
               </div>
 
               {browserRunning && browserTunnelRunning && (
-                <div className="mt-4 text-sm text-slate-400 bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                <div className="mt-4 text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg border border-border/50 flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
                   <p>
-                    CDP 隧道已建立。远程 Agent 可通过 <code className="text-emerald-400 bg-slate-800 px-1 py-0.5 rounded font-mono text-xs">localhost:{cdpRemotePort}</code> 连接。
+                    CDP 隧道已建立。远程 Agent 可通过 <code className="text-primary bg-muted px-1 py-0.5 rounded font-mono text-xs">localhost:{cdpRemotePort}</code> 连接。
                   </p>
                 </div>
               )}
@@ -583,13 +583,13 @@ export function ConnectionPage() {
                 <Activity className="w-5 h-5 text-purple-400" />
                 会话注入
               </CardTitle>
-              <Button variant="ghost" size="icon" onClick={() => loadAgents()} disabled={loadingAgents} className="h-8 w-8 ml-auto text-slate-400 hover:text-slate-100">
+              <Button variant="ghost" size="icon" onClick={() => loadAgents()} disabled={loadingAgents} className="h-8 w-8 ml-auto text-muted-foreground hover:text-foreground">
                 <RefreshCw className={`w-4 h-4 ${loadingAgents ? 'animate-spin' : ''}`} />
               </Button>
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto pt-0">
               {agents.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-3">
+                <div className="h-full flex flex-col items-center justify-center text-muted-foreground/70 gap-3">
                   <MessageSquare className="w-10 h-10 opacity-20" />
                   <p className="text-sm">
                     {loadingAgents ? "正在加载 Agent..." : "暂无可用的 Agent"}
@@ -598,55 +598,55 @@ export function ConnectionPage() {
               ) : (
                 <ul className="space-y-2">
                   {agents.map((agent) => (
-                    <li key={agent.id} className="bg-slate-900/40 rounded-lg border border-slate-700/50 overflow-hidden">
+                    <li key={agent.id} className="bg-muted/40 rounded-lg border border-border/50 overflow-hidden">
                       <button
-                        className="w-full flex items-center gap-3 p-3 hover:bg-slate-800/60 transition-colors text-left cursor-pointer"
+                        className="w-full flex items-center gap-3 p-3 hover:bg-muted/60 transition-colors text-left cursor-pointer"
                         onClick={() => toggleAgent(agent.id)}
                       >
                         {expandedAgent === agent.id ? (
-                          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                          <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
                         ) : (
-                          <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                          <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                         )}
-                        <span className="font-medium text-slate-200 truncate">
+                        <span className="font-medium text-foreground truncate">
                           {agent.displayName || agent.id}
                         </span>
                         {sessionsByAgent[agent.id] && (
-                          <Badge variant="secondary" className="ml-auto text-xs py-0 h-5 border border-slate-600">
+                          <Badge variant="secondary" className="ml-auto text-xs py-0 h-5 border border-border">
                             {sessionsByAgent[agent.id].length}
                           </Badge>
                         )}
                       </button>
                       
                       {expandedAgent === agent.id && (
-                        <div className="bg-slate-950/50 p-2 border-t border-slate-800/80">
+                        <div className="bg-background/50 p-2 border-t border-border">
                           <ul className="space-y-1.5">
                             {!sessionsByAgent[agent.id] ? (
-                              <li className="text-sm text-slate-500 p-2 text-center animate-pulse">加载中...</li>
+                              <li className="text-sm text-muted-foreground/70 p-2 text-center animate-pulse">加载中...</li>
                             ) : sessionsByAgent[agent.id].length === 0 ? (
-                              <li className="text-sm text-slate-500 p-2 text-center">无活跃 Session</li>
+                              <li className="text-sm text-muted-foreground/70 p-2 text-center">无活跃 Session</li>
                             ) : (
                               sessionsByAgent[agent.id].map((session) => (
-                                <li key={session.key} className="bg-slate-800/50 rounded-md border border-slate-700/50">
+                                <li key={session.key} className="bg-muted/50 rounded-md border border-border/50">
                                   <div className="flex items-center gap-2 p-2">
                                     <button
-                                      className="flex-1 flex items-center gap-2 min-w-0 hover:text-emerald-400 transition-colors text-left cursor-pointer"
+                                      className="flex-1 flex items-center gap-2 min-w-0 hover:text-primary transition-colors text-left cursor-pointer"
                                       title={session.displayName || session.key}
                                       onClick={() => toggleSession(session.key)}
                                     >
                                       {expandedSession === session.key ? (
-                                        <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                                       ) : (
-                                        <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                                       )}
-                                      <span className="font-mono text-xs text-slate-300 truncate">
+                                      <span className="font-mono text-xs text-foreground/80 truncate">
                                         {session.displayName || session.key}
                                       </span>
                                     </button>
                                     <Button
                                       size="sm"
                                       variant={notifiedSessions.has(session.key) ? "destructive" : "secondary"}
-                                      className={`h-7 text-xs px-2 shrink-0 ${notifiedSessions.has(session.key) ? '' : 'text-emerald-400 hover:text-emerald-300'}`}
+                                      className={`h-7 text-xs px-2 shrink-0 ${notifiedSessions.has(session.key) ? '' : 'text-primary hover:text-primary/80'}`}
                                       onClick={() => toggleNotify(session.key)}
                                     >
                                       {notifiedSessions.has(session.key) ? "断开" : "注入"}
@@ -655,11 +655,11 @@ export function ConnectionPage() {
                                   
                                   {expandedSession === session.key && (
                                     <div className="px-2 pb-2">
-                                      <div className="bg-slate-900 border border-slate-800 rounded p-2 max-h-48 overflow-y-auto space-y-2 font-mono text-xs">
+                                      <div className="bg-background border border-border rounded p-2 max-h-48 overflow-y-auto space-y-2 font-mono text-xs">
                                         {loadingHistory === session.key ? (
-                                          <p className="text-slate-500 italic text-center">加载历史...</p>
+                                          <p className="text-muted-foreground/70 italic text-center">加载历史...</p>
                                         ) : !chatHistory[session.key] || chatHistory[session.key].length === 0 ? (
-                                          <p className="text-slate-500 italic text-center">空</p>
+                                          <p className="text-muted-foreground/70 italic text-center">空</p>
                                         ) : (
                                           chatHistory[session.key].map((msg, i) => {
                                             const role = String(msg?.role ?? msg?.type ?? "unknown");
@@ -675,10 +675,10 @@ export function ConnectionPage() {
                                             
                                             return (
                                               <div key={i} className={`flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
-                                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${isUser ? 'bg-blue-900/50 text-blue-300 border border-blue-800/50' : 'bg-emerald-900/50 text-emerald-300 border border-emerald-800/50'}`}>
+                                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${isUser ? 'bg-blue-900/50 text-blue-300 border border-blue-800/50' : 'bg-emerald-900/50 text-primary/80 border border-emerald-800/50'}`}>
                                                   {isUser ? '用户' : 'AI'}
                                                 </span>
-                                                <div className={`p-1.5 rounded-md max-w-[90%] break-words border ${isUser ? 'bg-slate-800/80 text-slate-300 border-slate-700' : 'bg-transparent text-slate-400 border-transparent'}`}>
+                                                <div className={`p-1.5 rounded-md max-w-[90%] break-words border ${isUser ? 'bg-muted/80 text-foreground/80 border-border' : 'bg-transparent text-muted-foreground border-transparent'}`}>
                                                   {text.slice(0, 150)}{text.length > 150 ? "..." : ""}
                                                 </div>
                                               </div>
@@ -706,29 +706,29 @@ export function ConnectionPage() {
         <Card className={`glass-card flex flex-col ${fullyConnected ? 'h-[400px]' : 'h-[600px]'}`}>
           <CardHeader className="pb-4">
             <CardTitle>
-              <Terminal className="w-5 h-5 text-slate-400" />
+              <Terminal className="w-5 h-5 text-muted-foreground" />
               活动日志
             </CardTitle>
             {entries.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearActivity} className="h-8 text-xs text-slate-400 hover:text-slate-200 ml-auto">
+              <Button variant="ghost" size="sm" onClick={clearActivity} className="h-8 text-xs text-muted-foreground hover:text-foreground ml-auto">
                 清空
               </Button>
             )}
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto pt-0 font-mono text-xs">
             {entries.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-slate-500 italic">
+              <div className="h-full flex items-center justify-center text-muted-foreground/70 italic">
                 &gt; 等待事件...
               </div>
             ) : (
               <div className="space-y-1">
                 {entries.map((entry) => (
-                  <div key={entry.id} className="flex items-start gap-2 hover:bg-slate-800/50 p-1.5 rounded transition-colors group">
-                    <span className="text-slate-500 shrink-0 select-none">[{entry.timestamp}]</span>
-                    <span className={`shrink-0 ${entry.level === 'info' ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <div key={entry.id} className="flex items-start gap-2 hover:bg-muted/50 p-1.5 rounded transition-colors group">
+                    <span className="text-muted-foreground/70 shrink-0 select-none">[{entry.timestamp}]</span>
+                    <span className={`shrink-0 ${entry.level === 'info' ? 'text-primary' : 'text-destructive'}`}>
                       {entry.level === 'info' ? '→' : '✕'}
                     </span>
-                    <span className={`break-words ${entry.level === 'info' ? 'text-slate-300' : 'text-red-300'}`}>
+                    <span className={`break-words ${entry.level === 'info' ? 'text-foreground/80' : 'text-destructive/80'}`}>
                       {entry.message}
                     </span>
                   </div>
