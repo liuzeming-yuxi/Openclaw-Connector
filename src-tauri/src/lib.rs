@@ -208,6 +208,77 @@ fn connect(
         }
     });
 
+    // Spawn tunnel health monitor for auto-reconnect
+    let health_shutdown = Arc::clone(&state.ws_shutdown);
+    let health_app = app_handle.clone();
+    let health_server = server.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut was_connected = true;
+        let backoffs = [3u64, 6, 12];
+
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            if health_shutdown.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
+
+            let is_connected = {
+                let app_state = health_app.state::<AppState>();
+                let result = if let Ok(mut t) = app_state.tunnel.lock() {
+                    let s = t.refresh_status();
+                    s.state == ssh_tunnel::TunnelState::Connected
+                } else {
+                    false
+                };
+                result
+            };
+
+            if was_connected && !is_connected {
+                let _ = health_app.emit("node-event", &ws_client::NodeEvent::Error {
+                    message: "SSH 隧道断开，正在自动重连...".to_string(),
+                });
+
+                let mut reconnected = false;
+                for (attempt, delay) in backoffs.iter().enumerate() {
+                    if health_shutdown.load(std::sync::atomic::Ordering::Relaxed) {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(*delay)).await;
+
+                    let result = {
+                        let app_state = health_app.state::<AppState>();
+                        let r = if let Ok(mut t) = app_state.tunnel.lock() {
+                            t.start(health_server.clone())
+                        } else {
+                            Err("lock error".to_string())
+                        };
+                        r
+                    };
+
+                    match result {
+                        Ok(()) => {
+                            let _ = health_app.emit("node-event", &ws_client::NodeEvent::Authenticated);
+                            eprintln!("[health] tunnel auto-reconnected on attempt {}", attempt + 1);
+                            reconnected = true;
+                            break;
+                        }
+                        Err(e) => {
+                            eprintln!("[health] reconnect attempt {} failed: {e}", attempt + 1);
+                        }
+                    }
+                }
+
+                if !reconnected {
+                    let _ = health_app.emit("node-event", &ws_client::NodeEvent::Error {
+                        message: "SSH 隧道自动重连失败，请手动重新连接".to_string(),
+                    });
+                }
+            }
+
+            was_connected = is_connected;
+        }
+    });
+
     Ok(status)
 }
 
