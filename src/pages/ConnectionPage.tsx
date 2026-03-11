@@ -1,14 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useActivityStore } from "../store/useActivityStore";
 import { useConfigStore } from "../store/useConfigStore";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
-import { 
-  Server, Shield, Activity, RefreshCw, Unplug, Globe, 
+import {
+  Server, Shield, Activity, RefreshCw, Unplug, Globe,
   Chrome, ChevronRight, ChevronDown, MessageSquare,
   AlertCircle, CheckCircle2, Play, Square, ExternalLink, Terminal
 } from "lucide-react";
@@ -52,6 +53,7 @@ type BrowserStatusResponse = {
 };
 
 export function ConnectionPage() {
+  const { t } = useTranslation();
   const config = useConfigStore((s) => s.config);
   const patchConfig = useConfigStore((s) => s.patchConfig);
   const [server, setServer] = useState(config.server);
@@ -102,30 +104,36 @@ export function ConnectionPage() {
       const e = event.payload;
       switch (e.kind) {
         case "connected":
-          pushActivity("info", "WebSocket 已连接，正在认证...");
+          pushActivity("info", t("events.ws_connected"));
           break;
         case "authenticated":
-          pushActivity("info", "Gateway 认证成功，等待任务分派");
+          pushActivity("info", t("events.authenticated"));
           break;
         case "disconnected":
-          pushActivity("error", `WebSocket 断开：${e.reason}`);
+          pushActivity("error", t("events.ws_disconnected", { reason: e.reason }));
           break;
         case "taskReceived":
-          pushActivity("info", `收到任务 [${e.taskId.slice(0, 8)}] ${e.action}`);
+          pushActivity("info", t("events.task_received", { id: e.taskId.slice(0, 8), action: e.action }));
           break;
         case "taskCompleted":
-          pushActivity("info", `任务完成 [${e.taskId.slice(0, 8)}] exit=${e.exitCode} ${e.durationMs}ms`);
+          pushActivity("info", t("events.task_completed", { id: e.taskId.slice(0, 8), code: e.exitCode, ms: e.durationMs }));
           break;
         case "taskFailed":
-          pushActivity("error", `任务失败 [${e.taskId.slice(0, 8)}] ${e.error}`);
+          pushActivity("error", t("events.task_failed", { id: e.taskId.slice(0, 8), error: e.error }));
           break;
         case "error":
-          pushActivity("error", e.message);
+          if (e.message === "tunnel_reconnecting") {
+            pushActivity("error", t("events.tunnel_reconnecting"));
+          } else if (e.message === "tunnel_reconnect_failed") {
+            pushActivity("error", t("events.tunnel_reconnect_failed"));
+          } else {
+            pushActivity("error", e.message);
+          }
           break;
       }
     });
     return () => { unlisten.then((fn) => fn()); };
-  }, [pushActivity]);
+  }, [pushActivity, t]);
 
   const isConnected = status.tunnelState === "connected";
   const fullyConnected = isConnected && status.wsConnected;
@@ -140,13 +148,13 @@ export function ConnectionPage() {
 
   const statusText = useMemo(() => {
     if (fullyConnected) {
-      return latencyMs > 0 ? `已连接 · ${latencyMs}ms` : "已连接";
+      return latencyMs > 0 ? t("connection.status_connected_latency", { ms: latencyMs }) : t("connection.status_connected");
     }
-    if (isConnected) return "SSH 已连接，WS 连接中";
-    if (status.tunnelState === "connecting") return "连接中";
-    if (status.tunnelState === "reconnecting") return "重连中";
-    return "未连接";
-  }, [fullyConnected, isConnected, status.tunnelState, latencyMs]);
+    if (isConnected) return t("connection.status_ssh_ok_ws_pending");
+    if (status.tunnelState === "connecting") return t("connection.status_connecting");
+    if (status.tunnelState === "reconnecting") return t("connection.status_reconnecting");
+    return t("connection.status_disconnected");
+  }, [fullyConnected, isConnected, status.tunnelState, latencyMs, t]);
 
   // Poll health summary for latency
   useEffect(() => {
@@ -201,7 +209,7 @@ export function ConnectionPage() {
         await new Promise((r) => setTimeout(r, 1500));
         return loadAgents(retries - 1);
       }
-      pushActivity("error", `加载 Agent 列表失败：${msg}`);
+      pushActivity("error", t("events.agent_load_failed", { msg }));
     } finally {
       setLoadingAgents(false);
     }
@@ -214,7 +222,7 @@ export function ConnectionPage() {
       const list = Array.isArray(raw) ? raw as SessionInfo[] : [];
       setSessionsByAgent((prev) => ({ ...prev, [agentId]: list }));
     } catch (err) {
-      pushActivity("error", `加载 Session 列表失败：${err instanceof Error ? err.message : String(err)}`);
+      pushActivity("error", t("events.session_load_failed", { msg: err instanceof Error ? err.message : String(err) }));
     }
   };
 
@@ -238,7 +246,7 @@ export function ConnectionPage() {
       setChatHistory((prev) => ({ ...prev, [sessionKey]: messages }));
     } catch (err) {
       if (showLoading) {
-        pushActivity("error", `加载聊天记录失败：${err instanceof Error ? err.message : String(err)}`);
+        pushActivity("error", t("events.chat_load_failed", { msg: err instanceof Error ? err.message : String(err) }));
       }
       setChatHistory((prev) => ({ ...prev, [sessionKey]: [] }));
     } finally {
@@ -270,37 +278,38 @@ export function ConnectionPage() {
       : "";
     const message = isLinked
       ? `[系统通知] 本地节点 "${nodeName}" 已断开，不再可用。`
-      : `[系统通知] 本地节点 "${nodeName}" 已连接。\n- Node ID: ${config.nodeId}\n- 环境: macOS (本地)\n- 能力: 命令执行 (system.run)\n\n当用户的请求需要在本地环境执行时，你可以使用这个节点。${cdpBlock}`;
+      : `[系统通知] 本地节点 "${nodeName}" 已连接。\n- Node ID: ${config.nodeId}\n- 环境: 本地\n- 能力: 命令执行 (system.run)\n\n当用户的请求需要在本地环境执行时，你可以使用这个节点。${cdpBlock}`;
     try {
       await invoke("inject_message", { sessionKey, content: message });
       setNotifiedSessions((prev) => {
         const next = new Set(prev);
         if (isLinked) {
           next.delete(sessionKey);
-          pushActivity("info", `已断开本地连接 [${sessionKey.slice(0, 8)}]`);
+          pushActivity("info", t("events.session_unlinked", { key: sessionKey.slice(0, 8) }));
         } else {
           next.add(sessionKey);
-          pushActivity("info", `已连接本地到 session [${sessionKey.slice(0, 8)}]`);
+          pushActivity("info", t("events.session_linked", { key: sessionKey.slice(0, 8) }));
         }
         return next;
       });
     } catch (err) {
-      pushActivity("error", `操作失败：${err instanceof Error ? err.message : String(err)}`);
+      pushActivity("error", t("events.action_failed", { msg: err instanceof Error ? err.message : String(err) }));
     }
   };
 
   const connect = async (force = false) => {
     setBusy(true);
     setError(null);
-    pushActivity("info", force ? `强制连接：${server.user}@${server.host}` : `发起连接：${server.user}@${server.host}`);
+    const target = `${server.user}@${server.host}`;
+    pushActivity("info", force ? t("events.connect_force", { target }) : t("events.connect_init", { target }));
     try {
       await invoke("connect", { server, gatewayToken, nodeId: config.nodeId, nodeName, force });
-      pushActivity("info", "SSH 隧道已连接，WebSocket 正在建立...");
+      pushActivity("info", t("events.tunnel_ok"));
       patchConfig({ server, gatewayToken, nodeName });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
-      pushActivity("error", `连接失败：${message}`);
+      pushActivity("error", t("events.connect_failed", { msg: message }));
     } finally {
       setBusy(false);
     }
@@ -312,7 +321,7 @@ export function ConnectionPage() {
 
     // Send disconnect notifications to all notified sessions
     if (notifiedSessions.size > 0) {
-      pushActivity("info", `向 ${notifiedSessions.size} 个 session 发送断开连接通知...`);
+      pushActivity("info", t("events.disconnect_notify", { count: notifiedSessions.size }));
       const disconnectMsg = `[系统通知] 本地节点 "${nodeName}" 已断开，不再可用。`;
       for (const sessionKey of notifiedSessions) {
         try {
@@ -322,7 +331,7 @@ export function ConnectionPage() {
       setNotifiedSessions(new Set());
     }
 
-    pushActivity("info", "发起断开");
+    pushActivity("info", t("events.disconnect_init"));
     try {
       await invoke("disconnect");
       setStatus({
@@ -334,11 +343,11 @@ export function ConnectionPage() {
       setAgents([]);
       setSessionsByAgent({});
       setExpandedAgent(null);
-      pushActivity("info", "已断开");
+      pushActivity("info", t("events.disconnected"));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
-      pushActivity("error", `断开失败：${message}`);
+      pushActivity("error", t("events.disconnect_failed", { msg: message }));
     } finally {
       setBusy(false);
     }
@@ -358,13 +367,13 @@ export function ConnectionPage() {
       setBrowserRunning(result.running);
       setBrowserTunnelRunning(result.tunnelRunning);
       if (result.running) {
-        pushActivity("info", `Chrome 已启动，CDP 端口 ${cdpPort}，远程映射 ${cdpRemotePort}`);
+        pushActivity("info", t("events.chrome_started", { cdp: cdpPort, remote: cdpRemotePort }));
       } else {
-        pushActivity("error", "Chrome 进程已启动但 CDP 端口无响应，请关闭所有已有 Chrome 窗口后重试");
+        pushActivity("error", t("events.chrome_cdp_failed"));
       }
       patchConfig({ cdpPort, cdpRemotePort });
     } catch (err) {
-      pushActivity("error", `启动浏览器失败：${err instanceof Error ? err.message : String(err)}`);
+      pushActivity("error", t("events.chrome_start_failed", { msg: err instanceof Error ? err.message : String(err) }));
     } finally {
       setBrowserBusy(false);
     }
@@ -376,9 +385,9 @@ export function ConnectionPage() {
       await invoke("stop_browser");
       setBrowserRunning(false);
       setBrowserTunnelRunning(false);
-      pushActivity("info", "Chrome 已停止");
+      pushActivity("info", t("events.chrome_stopped"));
     } catch (err) {
-      pushActivity("error", `停止浏览器失败：${err instanceof Error ? err.message : String(err)}`);
+      pushActivity("error", t("events.chrome_stop_failed", { msg: err instanceof Error ? err.message : String(err) }));
     } finally {
       setBrowserBusy(false);
     }
@@ -386,16 +395,16 @@ export function ConnectionPage() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-20">
-      
+
       <div className="lg:col-span-7 space-y-6">
         {/* ── Connection Form ── */}
-        <Card className="glass-card">
-          <CardHeader>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-4">
             <CardTitle>
               <Server className="w-5 h-5 text-primary" />
-              隧道连接
+              {t("connection.tunnel_title")}
             </CardTitle>
-            <div className="flex items-center gap-2 bg-background/80 border border-border rounded-full px-3 py-1 font-mono text-xs">
+            <div className="flex items-center gap-2 bg-background border border-border rounded-full px-3 py-1 font-mono text-xs">
               <span className={statusClass} />
               <span className="text-foreground">{statusText}</span>
             </div>
@@ -403,59 +412,66 @@ export function ConnectionPage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
               <div>
-                <label className="label-base">主机地址</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1.5" htmlFor="host">{t("connection.host")}</label>
                 <Input
+                  id="host"
                   autoCapitalize="none" autoCorrect="off" spellCheck={false}
                   value={server.host}
                   onChange={(e) => setServer((p) => ({ ...p, host: e.target.value }))}
                 />
               </div>
               <div>
-                <label className="label-base">用户</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1.5" htmlFor="user">{t("connection.user")}</label>
                 <Input
+                  id="user"
                   autoCapitalize="none" autoCorrect="off" spellCheck={false}
                   value={server.user}
                   onChange={(e) => setServer((p) => ({ ...p, user: e.target.value }))}
                 />
               </div>
               <div className="md:col-span-2 lg:col-span-1">
-                <label className="label-base">节点名称</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1.5" htmlFor="nodeName">{t("connection.node_name")}</label>
                 <Input
+                  id="nodeName"
                   autoCapitalize="none" autoCorrect="off" spellCheck={false}
                   value={nodeName}
                   onChange={(e) => setNodeName(e.target.value)}
-                  placeholder="OpenClaw Connector"
+                  placeholder={t("connection.node_name_placeholder")}
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="label-base">Gateway Token</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1.5" htmlFor="gatewayToken">{t("connection.gateway_token")}</label>
                 <Input
+                  id="gatewayToken"
                   type="password"
                   autoCapitalize="none" autoCorrect="off" spellCheck={false}
                   value={gatewayToken}
                   onChange={(e) => setGatewayToken(e.target.value)}
-                  placeholder="gateway.auth.token 的值"
+                  placeholder={t("connection.gateway_token_placeholder")}
                 />
               </div>
               <div className="md:col-span-2 lg:col-span-1">
-                <label className="label-base">密钥路径</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1.5" htmlFor="keyPath">{t("connection.key_path")}</label>
                 <Input
+                  id="keyPath"
                   autoCapitalize="none" autoCorrect="off" spellCheck={false}
                   value={server.keyPath}
                   onChange={(e) => setServer((p) => ({ ...p, keyPath: e.target.value }))}
                 />
               </div>
               <div>
-                <label className="label-base">远程端口</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1.5" htmlFor="remotePort">{t("connection.remote_port")}</label>
                 <Input
+                  id="remotePort"
                   type="number"
                   value={server.remotePort}
                   onChange={(e) => setServer((p) => ({ ...p, remotePort: Number(e.target.value) || 18789 }))}
                 />
               </div>
               <div>
-                <label className="label-base">本地端口</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1.5" htmlFor="localPort">{t("connection.local_port")}</label>
                 <Input
+                  id="localPort"
                   type="number"
                   value={server.localPort}
                   onChange={(e) => setServer((p) => ({ ...p, localPort: Number(e.target.value) || 18789 }))}
@@ -466,30 +482,30 @@ export function ConnectionPage() {
             <div className="flex flex-wrap items-center gap-3">
               <Button onClick={() => connect()} disabled={busy} variant={fullyConnected ? "secondary" : "default"}>
                 <RefreshCw className={`w-4 h-4 mr-2 ${busy ? 'animate-spin' : ''}`} />
-                {busy ? "处理中..." : (fullyConnected ? "重新连接" : "连接网关")}
+                {busy ? t("connection.processing") : (fullyConnected ? t("connection.reconnect") : t("connection.connect"))}
               </Button>
-              
-              <Button onClick={doDisconnect} disabled={busy || (!isConnected && status.tunnelState === "disconnected")} variant="outline" className="border-destructive/50 hover:bg-destructive/10 text-destructive hover:text-destructive">
+
+              <Button onClick={doDisconnect} disabled={busy || (!isConnected && status.tunnelState === "disconnected")} variant="destructive">
                 <Unplug className="w-4 h-4 mr-2" />
-                断开
+                {t("connection.disconnect")}
               </Button>
-              
+
               {fullyConnected && (
-                <Button onClick={openGateway} variant="secondary" className="ml-auto">
-                  <Globe className="w-4 h-4 mr-2 text-blue-400" />
-                  管理控制台
+                <Button onClick={openGateway} variant="outline" className="ml-auto border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                  <Globe className="w-4 h-4 mr-2" />
+                  {t("connection.console")}
                 </Button>
               )}
             </div>
 
             {status.tunnelLastError && (
-              <div className="mt-4 flex items-start gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/30">
+              <div className="mt-4 flex items-start gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20">
                 <AlertCircle className="w-5 h-5 shrink-0" />
-                <p>最近错误：{status.tunnelLastError}</p>
+                <p>{t("connection.recent_error", { msg: status.tunnelLastError })}</p>
               </div>
             )}
             {error && (
-              <div className="mt-4 flex items-start gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/30">
+              <div className="mt-4 flex items-start gap-2 text-sm text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20">
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 <div className="flex-1">
                   <p>{error}</p>
@@ -501,7 +517,7 @@ export function ConnectionPage() {
                       disabled={busy}
                       onClick={() => connect(true)}
                     >
-                      强制释放端口并连接
+                      {t("connection.force_connect")}
                     </Button>
                   )}
                 </div>
@@ -512,24 +528,25 @@ export function ConnectionPage() {
 
         {/* ── Browser CDP ── */}
         {fullyConnected && (
-          <Card className="glass-card animate-in fade-in slide-in-from-bottom-4">
-            <CardHeader>
+          <Card className="animate-in fade-in slide-in-from-bottom-4">
+            <CardHeader className="flex flex-row items-center justify-between pb-4">
               <CardTitle>
-                <Chrome className="w-5 h-5 text-blue-400" />
-                浏览器自动化
+                <Chrome className="w-5 h-5 text-blue-500" />
+                {t("browser.title")}
               </CardTitle>
-              <div className="flex items-center gap-2 bg-background/80 border border-border rounded-full px-3 py-1 font-mono text-xs">
+              <div className="flex items-center gap-2 bg-background border border-border rounded-full px-3 py-1 font-mono text-xs">
                 <span className={browserRunning && browserTunnelRunning ? "status-dot status-dot-online" : browserRunning ? "status-dot status-dot-pending" : "status-dot status-dot-offline"} />
                 <span className="text-foreground">
-                  {browserRunning && browserTunnelRunning ? "隧道就绪" : browserRunning ? "运行中" : "未启动"}
+                  {browserRunning && browserTunnelRunning ? t("browser.status_tunnel_ready") : browserRunning ? t("browser.status_running") : t("browser.status_stopped")}
                 </span>
               </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div>
-                  <label className="label-base">CDP 端口 (本地)</label>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1.5" htmlFor="cdpPort">{t("browser.cdp_local")}</label>
                   <Input
+                    id="cdpPort"
                     type="number"
                     value={cdpPort}
                     onChange={(e) => setCdpPort(Number(e.target.value) || 9222)}
@@ -537,8 +554,9 @@ export function ConnectionPage() {
                   />
                 </div>
                 <div>
-                  <label className="label-base">远程映射端口</label>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1.5" htmlFor="cdpRemotePort">{t("browser.cdp_remote")}</label>
                   <Input
+                    id="cdpRemotePort"
                     type="number"
                     value={cdpRemotePort}
                     onChange={(e) => setCdpRemotePort(Number(e.target.value) || 19222)}
@@ -549,24 +567,22 @@ export function ConnectionPage() {
 
               <div className="flex items-center gap-3">
                 {!browserRunning ? (
-                  <Button onClick={startBrowser} disabled={browserBusy} className="bg-blue-600 hover:bg-blue-500 border-blue-500 text-white">
+                  <Button onClick={startBrowser} disabled={browserBusy} className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600">
                     <Play className="w-4 h-4 mr-2" />
-                    {browserBusy ? "启动中..." : "启动 Chrome"}
+                    {browserBusy ? t("browser.starting") : t("browser.start")}
                   </Button>
                 ) : (
                   <Button onClick={stopBrowser} disabled={browserBusy} variant="destructive">
                     <Square className="w-4 h-4 mr-2" />
-                    {browserBusy ? "停止中..." : "停止 Chrome"}
+                    {browserBusy ? t("browser.stopping") : t("browser.stop")}
                   </Button>
                 )}
               </div>
 
               {browserRunning && browserTunnelRunning && (
-                <div className="mt-4 text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg border border-border/50 flex items-start gap-3">
+                <div className="mt-4 text-sm text-foreground bg-accent/50 p-3 rounded-lg border border-border flex items-start gap-3">
                   <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
-                  <p>
-                    CDP 隧道已建立。远程 Agent 可通过 <code className="text-primary bg-muted px-1 py-0.5 rounded font-mono text-xs">localhost:{cdpRemotePort}</code> 连接。
-                  </p>
+                  <p dangerouslySetInnerHTML={{ __html: t("browser.cdp_ready", { port: cdpRemotePort }) }} />
                 </div>
               )}
             </CardContent>
@@ -577,30 +593,30 @@ export function ConnectionPage() {
       <div className="lg:col-span-5 space-y-6">
         {/* ── Agent Notification ── */}
         {fullyConnected && (
-          <Card className="glass-card animate-in fade-in slide-in-from-bottom-4 h-[400px] flex flex-col">
-            <CardHeader className="pb-4">
+          <Card className="animate-in fade-in slide-in-from-bottom-4 h-[400px] flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between pb-4">
               <CardTitle>
-                <Activity className="w-5 h-5 text-purple-400" />
-                会话注入
+                <Activity className="w-5 h-5 text-purple-500" />
+                {t("agents.title")}
               </CardTitle>
-              <Button variant="ghost" size="icon" onClick={() => loadAgents()} disabled={loadingAgents} className="h-8 w-8 ml-auto text-muted-foreground hover:text-foreground">
+              <Button variant="ghost" size="icon" onClick={() => loadAgents()} disabled={loadingAgents} className="h-8 w-8 text-muted-foreground hover:text-foreground">
                 <RefreshCw className={`w-4 h-4 ${loadingAgents ? 'animate-spin' : ''}`} />
               </Button>
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto pt-0">
               {agents.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-muted-foreground/70 gap-3">
+                <div className="h-full flex flex-col items-center justify-center text-muted-foreground/60 gap-3">
                   <MessageSquare className="w-10 h-10 opacity-20" />
                   <p className="text-sm">
-                    {loadingAgents ? "正在加载 Agent..." : "暂无可用的 Agent"}
+                    {loadingAgents ? t("agents.loading") : t("agents.empty")}
                   </p>
                 </div>
               ) : (
                 <ul className="space-y-2">
                   {agents.map((agent) => (
-                    <li key={agent.id} className="bg-muted/40 rounded-lg border border-border/50 overflow-hidden">
+                    <li key={agent.id} className="bg-background rounded-lg border border-border overflow-hidden shadow-sm">
                       <button
-                        className="w-full flex items-center gap-3 p-3 hover:bg-muted/60 transition-colors text-left cursor-pointer"
+                        className="w-full flex items-center gap-3 p-3 hover:bg-accent/50 transition-colors text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={() => toggleAgent(agent.id)}
                       >
                         {expandedAgent === agent.id ? (
@@ -612,25 +628,25 @@ export function ConnectionPage() {
                           {agent.displayName || agent.id}
                         </span>
                         {sessionsByAgent[agent.id] && (
-                          <Badge variant="secondary" className="ml-auto text-xs py-0 h-5 border border-border">
+                          <Badge variant="secondary" className="ml-auto text-xs py-0 h-5 border border-border bg-muted">
                             {sessionsByAgent[agent.id].length}
                           </Badge>
                         )}
                       </button>
-                      
+
                       {expandedAgent === agent.id && (
-                        <div className="bg-background/50 p-2 border-t border-border">
+                        <div className="bg-muted/30 p-2 border-t border-border">
                           <ul className="space-y-1.5">
                             {!sessionsByAgent[agent.id] ? (
-                              <li className="text-sm text-muted-foreground/70 p-2 text-center animate-pulse">加载中...</li>
+                              <li className="text-sm text-muted-foreground/70 p-2 text-center animate-pulse">{t("agents.loading_sessions")}</li>
                             ) : sessionsByAgent[agent.id].length === 0 ? (
-                              <li className="text-sm text-muted-foreground/70 p-2 text-center">无活跃 Session</li>
+                              <li className="text-sm text-muted-foreground/70 p-2 text-center">{t("agents.no_sessions")}</li>
                             ) : (
                               sessionsByAgent[agent.id].map((session) => (
-                                <li key={session.key} className="bg-muted/50 rounded-md border border-border/50">
+                                <li key={session.key} className="bg-background rounded-md border border-border shadow-sm">
                                   <div className="flex items-center gap-2 p-2">
                                     <button
-                                      className="flex-1 flex items-center gap-2 min-w-0 hover:text-primary transition-colors text-left cursor-pointer"
+                                      className="flex-1 flex items-center gap-2 min-w-0 hover:text-primary transition-colors text-left cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
                                       title={session.displayName || session.key}
                                       onClick={() => toggleSession(session.key)}
                                     >
@@ -646,39 +662,39 @@ export function ConnectionPage() {
                                     <Button
                                       size="sm"
                                       variant={notifiedSessions.has(session.key) ? "destructive" : "secondary"}
-                                      className={`h-7 text-xs px-2 shrink-0 ${notifiedSessions.has(session.key) ? '' : 'text-primary hover:text-primary/80'}`}
+                                      className={`h-7 text-xs px-2 shrink-0 ${notifiedSessions.has(session.key) ? '' : 'text-primary bg-primary/10 border-primary/20 hover:bg-primary/20 hover:text-primary'}`}
                                       onClick={() => toggleNotify(session.key)}
                                     >
-                                      {notifiedSessions.has(session.key) ? "断开" : "注入"}
+                                      {notifiedSessions.has(session.key) ? t("agents.disconnect") : t("agents.inject")}
                                     </Button>
                                   </div>
-                                  
+
                                   {expandedSession === session.key && (
                                     <div className="px-2 pb-2">
-                                      <div className="bg-background border border-border rounded p-2 max-h-48 overflow-y-auto space-y-2 font-mono text-xs">
+                                      <div className="bg-accent/40 border border-border rounded p-2 max-h-48 overflow-y-auto space-y-2 font-mono text-xs">
                                         {loadingHistory === session.key ? (
-                                          <p className="text-muted-foreground/70 italic text-center">加载历史...</p>
+                                          <p className="text-muted-foreground/70 italic text-center">{t("agents.loading_history")}</p>
                                         ) : !chatHistory[session.key] || chatHistory[session.key].length === 0 ? (
-                                          <p className="text-muted-foreground/70 italic text-center">空</p>
+                                          <p className="text-muted-foreground/70 italic text-center">{t("agents.empty_history")}</p>
                                         ) : (
                                           chatHistory[session.key].map((msg, i) => {
                                             const role = String(msg?.role ?? msg?.type ?? "unknown");
                                             const isUser = role === "user";
-                                            
+
                                             const c = msg?.content ?? msg?.text ?? msg?.message ?? "";
                                             let text: string;
                                             if (typeof c === "string") text = c;
                                             else if (Array.isArray(c)) text = c.map((b: Record<string, unknown>) => typeof b === "string" ? b : String(b?.text ?? b?.content ?? "")).join(" ");
                                             else text = String(c);
-                                            
+
                                             if (!text && !role) return null;
-                                            
+
                                             return (
                                               <div key={i} className={`flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
-                                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${isUser ? 'bg-blue-900/50 text-blue-300 border border-blue-800/50' : 'bg-emerald-900/50 text-primary/80 border border-emerald-800/50'}`}>
-                                                  {isUser ? '用户' : 'AI'}
+                                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border ${isUser ? 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800/50' : 'bg-primary/10 text-primary border-primary/20 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800/50'}`}>
+                                                  {isUser ? t("agents.role_user") : t("agents.role_ai")}
                                                 </span>
-                                                <div className={`p-1.5 rounded-md max-w-[90%] break-words border ${isUser ? 'bg-muted/80 text-foreground/80 border-border' : 'bg-transparent text-muted-foreground border-transparent'}`}>
+                                                <div className={`p-1.5 rounded-md max-w-[90%] break-words border ${isUser ? 'bg-background text-foreground/90 border-border shadow-sm' : 'bg-transparent text-muted-foreground border-transparent'}`}>
                                                   {text.slice(0, 150)}{text.length > 150 ? "..." : ""}
                                                 </div>
                                               </div>
@@ -703,32 +719,32 @@ export function ConnectionPage() {
         )}
 
         {/* ── Activity Log ── */}
-        <Card className={`glass-card flex flex-col ${fullyConnected ? 'h-[400px]' : 'h-[600px]'}`}>
-          <CardHeader className="pb-4">
+        <Card className={`flex flex-col ${fullyConnected ? 'h-[400px]' : 'h-[600px]'}`}>
+          <CardHeader className="flex flex-row items-center justify-between pb-4">
             <CardTitle>
               <Terminal className="w-5 h-5 text-muted-foreground" />
-              活动日志
+              {t("activity.title")}
             </CardTitle>
             {entries.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearActivity} className="h-8 text-xs text-muted-foreground hover:text-foreground ml-auto">
-                清空
+              <Button variant="ghost" size="sm" onClick={clearActivity} className="h-8 text-xs text-muted-foreground hover:text-foreground">
+                {t("activity.clear")}
               </Button>
             )}
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto pt-0 font-mono text-xs">
             {entries.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-muted-foreground/70 italic">
-                &gt; 等待事件...
+              <div className="h-full flex items-center justify-center text-muted-foreground/50 italic">
+                {t("activity.waiting")}
               </div>
             ) : (
               <div className="space-y-1">
                 {entries.map((entry) => (
-                  <div key={entry.id} className="flex items-start gap-2 hover:bg-muted/50 p-1.5 rounded transition-colors group">
-                    <span className="text-muted-foreground/70 shrink-0 select-none">[{entry.timestamp}]</span>
+                  <div key={entry.id} className="flex items-start gap-2 hover:bg-accent/50 p-1.5 rounded transition-colors group">
+                    <span className="text-muted-foreground/60 shrink-0 select-none">[{entry.timestamp}]</span>
                     <span className={`shrink-0 ${entry.level === 'info' ? 'text-primary' : 'text-destructive'}`}>
                       {entry.level === 'info' ? '→' : '✕'}
                     </span>
-                    <span className={`break-words ${entry.level === 'info' ? 'text-foreground/80' : 'text-destructive/80'}`}>
+                    <span className={`break-words ${entry.level === 'info' ? 'text-foreground/90' : 'text-destructive/90'}`}>
                       {entry.message}
                     </span>
                   </div>
