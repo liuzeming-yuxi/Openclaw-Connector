@@ -9,8 +9,12 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
 
 /// Return the platform identifier for WebSocket auth payloads.
+/// Gateway protocol uses "darwin" (not "macos") for macOS.
 fn current_platform() -> &'static str {
-    std::env::consts::OS
+    match std::env::consts::OS {
+        "macos" => "darwin",
+        other => other,
+    }
 }
 
 /// Events emitted from the WebSocket client to the UI layer.
