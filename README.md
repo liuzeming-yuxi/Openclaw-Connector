@@ -144,12 +144,12 @@ pnpm build
 
 ## Roadmap
 
-- [ ] Cross-platform support (Windows & Linux)
-- [ ] Multi-language UI (i18n)
+- [x] Cross-platform support (Windows & Linux)
+- [x] Multi-language UI (i18n: Chinese + English)
 - [x] Theme switching (Light / Dark mode)
 - [x] OpenClaw health check & auto-repair
 - [ ] Browser automation beyond Chrome (Firefox, Edge, etc.)
-- [ ] Comprehensive CI/CD pipeline
+- [x] Comprehensive CI/CD pipeline (multi-platform matrix)
 - [x] PR-level CI checks (lint, test, clippy)
 - [ ] Architecture / sequence diagram
 - [x] Safer port management (avoid killing unrelated processes)

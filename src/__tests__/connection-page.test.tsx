@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { ConnectionPage } from "../pages/ConnectionPage";
 import { invoke } from "@tauri-apps/api/core";
+import "../i18n";
 
 // Mock Tauri API calls
 vi.mock("@tauri-apps/api/core", () => ({
