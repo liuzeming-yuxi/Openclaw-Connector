@@ -554,6 +554,36 @@ fn open_url(url: String) -> Result<(), String> {
     open::that(&url).map_err(|e| format!("failed to open URL: {e}"))
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DetectGatewayResult {
+    token: String,
+    port: u16,
+}
+
+#[tauri::command]
+fn detect_local_gateway() -> Result<DetectGatewayResult, String> {
+    let home = dirs::home_dir().ok_or("cannot determine home directory")?;
+    let path = home.join(".openclaw").join("openclaw.json");
+    if !path.exists() {
+        return Err("~/.openclaw/openclaw.json not found".to_string());
+    }
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("failed to read openclaw.json: {e}"))?;
+    let val: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("failed to parse openclaw.json: {e}"))?;
+    let token = val
+        .pointer("/gateway/auth/token")
+        .and_then(|v| v.as_str())
+        .ok_or("gateway.auth.token not found in openclaw.json")?
+        .to_string();
+    let port = val
+        .pointer("/gateway/port")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(18789) as u16;
+    Ok(DetectGatewayResult { token, port })
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
@@ -565,6 +595,7 @@ pub fn run() {
             get_connection_status,
             get_health_summary,
             open_url,
+            detect_local_gateway,
             list_agents,
             list_sessions,
             inject_message,

@@ -19,6 +19,7 @@ sha2 = "0.10"
 base64 = "0.22"
 rand = "0.8"
 open = "5"
+dirs = "6"
 
 [features]
 default = ["custom-protocol"]
