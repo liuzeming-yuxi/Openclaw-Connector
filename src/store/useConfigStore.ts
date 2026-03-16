@@ -1,10 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
-import { createDefaultConfig, type ConnectorConfig } from "../types/config";
+import { createDefaultConfig, type AppConfig } from "../types/config";
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
-function debouncedSave(cfg: ConnectorConfig) {
+function debouncedSave(cfg: AppConfig) {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     invoke("save_app_config", { cfg }).catch((err) => {
@@ -14,10 +14,10 @@ function debouncedSave(cfg: ConnectorConfig) {
 }
 
 type ConfigState = {
-  config: ConnectorConfig;
+  config: AppConfig;
   loaded: boolean;
-  setConfig: (config: ConnectorConfig) => void;
-  patchConfig: (patch: Partial<ConnectorConfig>) => void;
+  setConfig: (config: AppConfig) => void;
+  patchConfig: (patch: Partial<AppConfig>) => void;
 };
 
 export const useConfigStore = create<ConfigState>()((set, get) => ({
@@ -32,7 +32,6 @@ export const useConfigStore = create<ConfigState>()((set, get) => ({
     const next = {
       ...prev,
       ...patch,
-      server: { ...prev.server, ...(patch.server ?? {}) },
       runtime: { ...prev.runtime, ...(patch.runtime ?? {}) },
     };
     set({ config: next });
