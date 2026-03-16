@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import { useConfigStore } from "../store/useConfigStore";
 import {
   addProfile,
   createDefaultProfile,
@@ -15,6 +16,8 @@ import {
   Loader2,
   ArrowLeft,
   ArrowRight,
+  Key,
+  ChevronDown,
 } from "lucide-react";
 
 type Props = {
@@ -51,7 +54,9 @@ export function ProfileWizard({ onCreated, onCancel }: Props) {
   // --- Step 1 fields ---
   const [host, setHost] = useState("");
   const [user, setUser] = useState("");
-  const [keyPath, setKeyPath] = useState("~/.ssh/id_ed25519");
+  const [keyPath, setKeyPath] = useState("");
+  const [sshKeys, setSshKeys] = useState<string[]>([]);
+  const [keysLoading, setKeysLoading] = useState(true);
   const [sshStatus, setSshStatus] = useState<SshStatus>({ state: "idle" });
 
   // --- Step 2 fields ---
@@ -67,6 +72,19 @@ export function ProfileWizard({ onCreated, onCancel }: Props) {
 
   // --- Temp profile tracking (for cleanup) ---
   const tempProfileIdRef = useRef<string | null>(null);
+
+  // Scan SSH keys on mount
+  useEffect(() => {
+    invoke<string[]>("list_ssh_keys")
+      .then((keys) => {
+        setSshKeys(keys);
+        if (keys.length > 0 && !keyPath) {
+          setKeyPath(keys[0]);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setKeysLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset SSH status when any Step 1 field changes
   useEffect(() => {
@@ -122,6 +140,12 @@ export function ProfileWizard({ onCreated, onCancel }: Props) {
     tempProfileIdRef.current = null;
   }, []);
 
+  // --- Flush config to disk (bypasses debounce) ---
+  const flushConfig = async () => {
+    const cfg = useConfigStore.getState().config;
+    await invoke("save_app_config", { cfg });
+  };
+
   // --- Handlers ---
   const testSsh = async () => {
     setSshStatus({ state: "testing" });
@@ -151,6 +175,9 @@ export function ProfileWizard({ onCreated, onCancel }: Props) {
       profile.gatewayToken = token;
       addProfile(profile);
       tempProfileIdRef.current = profile.id;
+
+      // Flush to disk immediately so Rust connect() can find the profile
+      await flushConfig();
 
       await invoke("connect", { profileId: profile.id });
       setWsStatus({ state: "success" });
@@ -278,18 +305,38 @@ export function ProfileWizard({ onCreated, onCancel }: Props) {
               </div>
             </div>
 
+            {/* SSH Key selector */}
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">
-                {t("connection.key_path")}
+                {t("wizard.select_key")}
               </label>
-              <Input
-                value={keyPath}
-                onChange={(e) => setKeyPath(e.target.value)}
-                placeholder="~/.ssh/id_ed25519"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-              />
+              {keysLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse py-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {t("wizard.scanning_keys")}
+                </div>
+              ) : sshKeys.length > 0 ? (
+                <div className="relative">
+                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <select
+                    value={keyPath}
+                    onChange={(e) => setKeyPath(e.target.value)}
+                    className="w-full h-10 pl-9 pr-9 rounded-md border border-input bg-background text-sm text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    {sshKeys.map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <AlertCircle className="w-4 h-4" />
+                  {t("wizard.no_keys_found")}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
@@ -298,6 +345,7 @@ export function ProfileWizard({ onCreated, onCancel }: Props) {
                 disabled={
                   !host.trim() ||
                   !user.trim() ||
+                  !keyPath ||
                   sshStatus.state === "testing"
                 }
                 variant="secondary"

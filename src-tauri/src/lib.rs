@@ -718,6 +718,44 @@ fn read_remote_gateway_config(host: String, user: String, key_path: Option<Strin
     Ok(RemoteGatewayConfig { token, port })
 }
 
+#[tauri::command]
+fn list_ssh_keys() -> Result<Vec<String>, String> {
+    let home = dirs::home_dir().ok_or("cannot determine home directory")?;
+    let ssh_dir = home.join(".ssh");
+    if !ssh_dir.is_dir() {
+        return Ok(vec![]);
+    }
+
+    let mut keys = Vec::new();
+    let entries = std::fs::read_dir(&ssh_dir)
+        .map_err(|e| format!("failed to read ~/.ssh: {e}"))?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        // Skip public keys, known_hosts, config, authorized_keys, etc.
+        if name.ends_with(".pub")
+            || name == "known_hosts"
+            || name == "known_hosts.old"
+            || name == "config"
+            || name == "authorized_keys"
+            || name == "environment"
+        {
+            continue;
+        }
+        // Check if file looks like a private key (starts with -----BEGIN)
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if content.starts_with("-----BEGIN") {
+                keys.push(format!("~/.ssh/{name}"));
+            }
+        }
+    }
+    keys.sort();
+    Ok(keys)
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
@@ -732,6 +770,7 @@ pub fn run() {
             detect_local_gateway,
             test_ssh_connection,
             read_remote_gateway_config,
+            list_ssh_keys,
             list_agents,
             list_sessions,
             inject_message,

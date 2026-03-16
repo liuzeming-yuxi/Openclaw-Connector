@@ -70,7 +70,10 @@
     "next": "Next",
     "back": "Back",
     "save": "Save Profile",
-    "profile_name": "Profile Name"
+    "profile_name": "Profile Name",
+    "select_key": "Select SSH Key",
+    "no_keys_found": "No SSH keys found",
+    "scanning_keys": "Scanning keys..."
   },
   "browser": {
     "title": "Browser Automation",
