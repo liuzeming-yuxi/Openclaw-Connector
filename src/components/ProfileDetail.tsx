@@ -14,7 +14,7 @@ import {
   Server, Activity, RefreshCw, Unplug, Globe,
   Chrome, ChevronRight, ChevronDown, MessageSquare,
   AlertCircle, CheckCircle2, Play, Square, Terminal,
-  Pencil, Save, X, Settings2, Trash2,
+  Pencil, Save, X, Settings2, Trash2, Bug,
 } from "lucide-react";
 
 type ConnectionStatus = {
@@ -60,9 +60,10 @@ type Props = {
   onConnected: (profileId: string) => void;
   onDisconnected: () => void;
   onDelete?: () => void;
+  canDelete?: boolean;
 };
 
-export function ProfileDetail({ profile, onConnected, onDisconnected, onDelete }: Props) {
+export function ProfileDetail({ profile, onConnected, onDisconnected, onDelete, canDelete = true }: Props) {
   const { t } = useTranslation();
 
   // Editing state
@@ -97,6 +98,44 @@ export function ProfileDetail({ profile, onConnected, onDisconnected, onDelete }
   const pushActivity = useActivityStore((s) => s.push);
   const entries = useActivityStore((s) => s.entries);
   const clearActivity = useActivityStore((s) => s.clear);
+
+  const exportDiagnostics = async () => {
+    try {
+      const [conn, health] = await Promise.all([
+        invoke<ConnectionStatus>("get_connection_status"),
+        invoke<{ latencyMs: number; tunnelConnected: boolean; gatewayOk: boolean; consecutiveFailures: number }>("get_health_summary"),
+      ]);
+
+      const activityEntries = useActivityStore.getState().entries;
+
+      const diag = {
+        exported_at: new Date().toISOString(),
+        app_version: "0.3.0",
+        os: navigator.userAgent,
+        profile: {
+          name: profile.name,
+          host: profile.server.host,
+          user: profile.server.user,
+          remotePort: profile.server.remotePort,
+          localPort: profile.server.localPort,
+          keyPath: profile.server.keyPath,
+          token: "***",
+        },
+        connection: conn,
+        health,
+        activity_log: activityEntries,
+      };
+
+      const json = JSON.stringify(diag, null, 2);
+      const saved = await invoke<boolean>("export_diagnostics", { jsonContent: json });
+      if (saved) {
+        pushActivity("info", t("activity.export_success"));
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      pushActivity("error", t("activity.export_failed", { msg }));
+    }
+  };
 
   // Agent / session state
   const [agents, setAgents] = useState<AgentInfo[]>([]);
@@ -472,7 +511,7 @@ export function ProfileDetail({ profile, onConnected, onDisconnected, onDelete }
                 <Pencil className="w-4 h-4" />
               </Button>
               {onDelete && (
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={onDelete}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={onDelete} disabled={!canDelete} title={!canDelete ? t("profile.last_profile_hint") : t("profile.delete")}>
                   <Trash2 className="w-4 h-4" />
                 </Button>
               )}
@@ -857,11 +896,22 @@ export function ProfileDetail({ profile, onConnected, onDisconnected, onDelete }
               <Terminal className="w-5 h-5 text-muted-foreground" />
               {t("activity.title")}
             </CardTitle>
-            {entries.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearActivity} className="h-8 text-xs text-muted-foreground hover:text-foreground">
-                {t("activity.clear")}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={exportDiagnostics}
+                className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                title={t("activity.export")}
+              >
+                <Bug className="w-4 h-4" />
               </Button>
-            )}
+              {entries.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearActivity} className="h-8 text-xs text-muted-foreground hover:text-foreground">
+                  {t("activity.clear")}
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto pt-0 font-mono text-xs">
             {entries.length === 0 ? (
