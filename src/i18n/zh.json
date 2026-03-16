@@ -50,7 +50,27 @@
     "auto_detected": "已自动检测本地 Gateway",
     "detect_failed": "未检测到本地 Gateway，请手动填写",
     "detecting": "检测本地 Gateway...",
-    "creating": "创建配置中..."
+    "creating": "创建配置中...",
+    "last_profile_hint": "至少保留一个配置"
+  },
+  "wizard": {
+    "step1_title": "SSH 连接",
+    "step2_title": "Gateway 配置",
+    "step3_title": "命名保存",
+    "test_ssh": "测试连接",
+    "test_gateway": "测试 Gateway",
+    "testing": "测试中...",
+    "ssh_success": "SSH 连接成功",
+    "ssh_failed": "SSH 连接失败：{{msg}}",
+    "reading_config": "正在读取远程配置...",
+    "config_read_success": "Token 已自动获取",
+    "config_read_failed": "未读取到远程配置，请手动输入",
+    "ws_success": "Gateway 连接成功",
+    "ws_failed": "Gateway 连接失败：{{msg}}",
+    "next": "下一步",
+    "back": "上一步",
+    "save": "保存配置",
+    "profile_name": "配置名称"
   },
   "browser": {
     "title": "浏览器自动化",

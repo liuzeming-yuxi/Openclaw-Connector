@@ -50,7 +50,27 @@
     "auto_detected": "Local Gateway auto-detected",
     "detect_failed": "No local Gateway found, enter manually",
     "detecting": "Detecting local Gateway...",
-    "creating": "Creating profile..."
+    "creating": "Creating profile...",
+    "last_profile_hint": "At least one profile must be kept"
+  },
+  "wizard": {
+    "step1_title": "SSH Connection",
+    "step2_title": "Gateway Config",
+    "step3_title": "Name & Save",
+    "test_ssh": "Test Connection",
+    "test_gateway": "Test Gateway",
+    "testing": "Testing...",
+    "ssh_success": "SSH connected successfully",
+    "ssh_failed": "SSH connection failed: {{msg}}",
+    "reading_config": "Reading remote config...",
+    "config_read_success": "Token auto-detected",
+    "config_read_failed": "Remote config not found, enter manually",
+    "ws_success": "Gateway connected successfully",
+    "ws_failed": "Gateway connection failed: {{msg}}",
+    "next": "Next",
+    "back": "Back",
+    "save": "Save Profile",
+    "profile_name": "Profile Name"
   },
   "browser": {
     "title": "Browser Automation",
