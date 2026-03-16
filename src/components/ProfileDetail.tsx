@@ -14,7 +14,7 @@ import {
   Server, Activity, RefreshCw, Unplug, Globe,
   Chrome, ChevronRight, ChevronDown, MessageSquare,
   AlertCircle, CheckCircle2, Play, Square, Terminal,
-  Pencil, Save, X, Settings2,
+  Pencil, Save, X, Settings2, Trash2,
 } from "lucide-react";
 
 type ConnectionStatus = {
@@ -59,9 +59,10 @@ type Props = {
   profile: ConnectionProfile;
   onConnected: (profileId: string) => void;
   onDisconnected: () => void;
+  onDelete?: () => void;
 };
 
-export function ProfileDetail({ profile, onConnected, onDisconnected }: Props) {
+export function ProfileDetail({ profile, onConnected, onDisconnected, onDelete }: Props) {
   const { t } = useTranslation();
 
   // Editing state
@@ -466,9 +467,16 @@ export function ProfileDetail({ profile, onConnected, onDisconnected }: Props) {
             <span className="text-foreground">{statusText}</span>
           </div>
           {!editing ? (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditing(true)}>
-              <Pencil className="w-4 h-4" />
-            </Button>
+            <div className="flex gap-1">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditing(true)}>
+                <Pencil className="w-4 h-4" />
+              </Button>
+              {onDelete && (
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={onDelete}>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
           ) : (
             <div className="flex gap-1">
               <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={saveEdits}>

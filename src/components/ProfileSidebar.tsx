@@ -60,11 +60,10 @@ export function ProfileSidebar({ onNewProfile, connectedProfileId }: Props) {
                 <span className="font-medium text-sm text-foreground truncate">
                   {profile.name || profile.server.host || "Unnamed"}
                 </span>
-                {profiles.length > 1 && (
+                {profiles.length > 1 && isActive && (
                   <span
                     onClick={(e) => handleDelete(e, profile)}
-                    className="ml-auto hover:text-destructive p-1 rounded opacity-0 hover:opacity-100 transition-opacity"
-                    style={{ opacity: isActive ? 0.4 : 0 }}
+                    className="ml-auto text-muted-foreground hover:text-destructive p-1 rounded transition-colors cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </span>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useConfigStore } from "../store/useConfigStore";
-import { setActiveProfileId } from "../store/useProfileStore";
+import { removeProfile, setActiveProfileId } from "../store/useProfileStore";
 import { ProfileSidebar } from "../components/ProfileSidebar";
 import { ProfileDetail } from "../components/ProfileDetail";
 import { NewProfileForm } from "../components/NewProfileForm";
@@ -15,6 +15,12 @@ export function ConnectionPage() {
 
   const [mode, setMode] = useState<"view" | "new">("view");
   const [connectedProfileId, setConnectedProfileId] = useState<string | null>(null);
+
+  const handleDelete = () => {
+    if (config.profiles.length <= 1 || !activeProfile) return;
+    if (!confirm(t("profile.confirm_delete", { name: activeProfile.name }))) return;
+    removeProfile(activeProfile.id);
+  };
 
   return (
     <div className="grid grid-cols-[280px_1fr] gap-0 border border-border rounded-xl overflow-hidden bg-card min-h-[600px]">
@@ -38,6 +44,7 @@ export function ConnectionPage() {
             profile={activeProfile}
             onConnected={(id) => setConnectedProfileId(id)}
             onDisconnected={() => setConnectedProfileId(null)}
+            onDelete={config.profiles.length > 1 ? handleDelete : undefined}
           />
         ) : (
           <div className="h-full flex items-center justify-center text-muted-foreground">
