@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ConnectionPage } from "./pages/ConnectionPage";
 import { useConfigStore } from "./store/useConfigStore";
-import type { ConnectorConfig } from "./types/config";
+import type { AppConfig } from "./types/config";
 import { Terminal, ShieldCheck, Sun, Moon, Monitor, Languages } from "lucide-react";
 import { useThemeStore } from "./store/useThemeStore";
 import { useLanguageStore } from "./store/useLanguageStore";
@@ -20,7 +20,7 @@ export default function App() {
 
     invoke("load_app_config")
       .then((cfg) => {
-        if (cfg) setConfig(cfg as ConnectorConfig);
+        if (cfg) setConfig(cfg as AppConfig);
       })
       .catch((err) => {
         console.warn("[config] failed to load from backend, using defaults:", err);
