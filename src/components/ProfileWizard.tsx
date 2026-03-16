@@ -18,6 +18,9 @@ import {
   ArrowRight,
   Key,
   ChevronDown,
+  Plus,
+  Copy,
+  Check,
 } from "lucide-react";
 
 type Props = {
@@ -58,6 +61,9 @@ export function ProfileWizard({ onCreated, onCancel }: Props) {
   const [sshKeys, setSshKeys] = useState<string[]>([]);
   const [keysLoading, setKeysLoading] = useState(true);
   const [sshStatus, setSshStatus] = useState<SshStatus>({ state: "idle" });
+  const [creatingKey, setCreatingKey] = useState(false);
+  const [publicKey, setPublicKey] = useState("");
+  const [copied, setCopied] = useState(false);
 
   // --- Step 2 fields ---
   const [token, setToken] = useState("");
@@ -89,7 +95,16 @@ export function ProfileWizard({ onCreated, onCancel }: Props) {
   // Reset SSH status when any Step 1 field changes
   useEffect(() => {
     setSshStatus({ state: "idle" });
+    setCopied(false);
   }, [host, user, keyPath]);
+
+  // Load public key when key path changes
+  useEffect(() => {
+    if (!keyPath) { setPublicKey(""); return; }
+    invoke<string>("read_ssh_public_key", { keyPath })
+      .then(setPublicKey)
+      .catch(() => setPublicKey(""));
+  }, [keyPath]);
 
   // Auto-read remote config when entering Step 2
   useEffect(() => {
@@ -147,6 +162,29 @@ export function ProfileWizard({ onCreated, onCancel }: Props) {
   };
 
   // --- Handlers ---
+  const createKey = async () => {
+    setCreatingKey(true);
+    try {
+      const result = await invoke<{ privateKeyPath: string; publicKey: string }>("generate_ssh_key");
+      // Refresh key list
+      const keys = await invoke<string[]>("list_ssh_keys");
+      setSshKeys(keys);
+      setKeyPath(result.privateKeyPath);
+      setPublicKey(result.publicKey);
+    } catch (err) {
+      console.error("Failed to create SSH key:", err);
+    } finally {
+      setCreatingKey(false);
+    }
+  };
+
+  const copyPublicKey = async () => {
+    if (!publicKey) return;
+    await navigator.clipboard.writeText(publicKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const testSsh = async () => {
     setSshStatus({ state: "testing" });
     try {
@@ -315,26 +353,43 @@ export function ProfileWizard({ onCreated, onCancel }: Props) {
                   <Loader2 className="w-4 h-4 animate-spin" />
                   {t("wizard.scanning_keys")}
                 </div>
-              ) : sshKeys.length > 0 ? (
-                <div className="relative">
-                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  <select
-                    value={keyPath}
-                    onChange={(e) => setKeyPath(e.target.value)}
-                    className="w-full h-10 pl-9 pr-9 rounded-md border border-input bg-background text-sm text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  >
-                    {sshKeys.map((k) => (
-                      <option key={k} value={k}>
-                        {k}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               ) : (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                  <AlertCircle className="w-4 h-4" />
-                  {t("wizard.no_keys_found")}
+                <div className="flex items-center gap-2">
+                  {sshKeys.length > 0 ? (
+                    <div className="relative flex-1">
+                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                      <select
+                        value={keyPath}
+                        onChange={(e) => setKeyPath(e.target.value)}
+                        className="w-full h-10 pl-9 pr-9 rounded-md border border-input bg-background text-sm text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      >
+                        {sshKeys.map((k) => (
+                          <option key={k} value={k}>
+                            {k}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex items-center gap-2 text-sm text-muted-foreground py-2">
+                      <AlertCircle className="w-4 h-4" />
+                      {t("wizard.no_keys_found")}
+                    </div>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={createKey}
+                    disabled={creatingKey}
+                  >
+                    {creatingKey ? (
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                    ) : (
+                      <Plus className="w-4 h-4 mr-1" />
+                    )}
+                    {creatingKey ? t("wizard.creating_key") : t("wizard.create_key")}
+                  </Button>
                 </div>
               )}
             </div>
@@ -371,6 +426,41 @@ export function ProfileWizard({ onCreated, onCancel }: Props) {
                 </div>
               )}
             </div>
+
+            {/* SSH failure guide: show public key + copy + ssh-copy-id hint */}
+            {sshStatus.state === "error" && publicKey && (
+              <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+                <p className="text-sm font-medium text-foreground">
+                  {t("wizard.ssh_guide_title")}
+                </p>
+                <div className="relative">
+                  <pre className="text-xs bg-background rounded-md p-3 pr-10 overflow-x-auto border border-border font-mono break-all whitespace-pre-wrap">
+                    {publicKey}
+                  </pre>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-2 right-2 h-7 w-7"
+                    onClick={copyPublicKey}
+                  >
+                    {copied ? (
+                      <Check className="w-3.5 h-3.5 text-primary" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t("wizard.ssh_guide_hint")}
+                </p>
+                <pre className="text-xs bg-background rounded-md p-2 overflow-x-auto border border-border font-mono">
+                  ssh-copy-id -i {keyPath} {user ? `${user}@` : ""}{host}
+                </pre>
+                <p className="text-xs text-muted-foreground">
+                  {t("wizard.ssh_guide_or")}
+                </p>
+              </div>
+            )}
           </div>
         )}
 

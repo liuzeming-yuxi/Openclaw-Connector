@@ -73,7 +73,15 @@
     "profile_name": "Profile Name",
     "select_key": "Select SSH Key",
     "no_keys_found": "No SSH keys found",
-    "scanning_keys": "Scanning keys..."
+    "scanning_keys": "Scanning keys...",
+    "create_key": "Create New Key",
+    "creating_key": "Generating key...",
+    "key_created": "Key created",
+    "ssh_guide_title": "How to authorize this key on the server?",
+    "ssh_guide_copy_key": "Copy Public Key",
+    "ssh_guide_copied": "Copied!",
+    "ssh_guide_hint": "Send the public key to the server admin, or run:",
+    "ssh_guide_or": "Or manually append to the server's ~/.ssh/authorized_keys"
   },
   "browser": {
     "title": "Browser Automation",

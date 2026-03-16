@@ -73,7 +73,15 @@
     "profile_name": "配置名称",
     "select_key": "选择 SSH 密钥",
     "no_keys_found": "未找到 SSH 密钥",
-    "scanning_keys": "扫描密钥..."
+    "scanning_keys": "扫描密钥...",
+    "create_key": "创建新密钥",
+    "creating_key": "生成密钥中...",
+    "key_created": "密钥已创建",
+    "ssh_guide_title": "如何让服务器信任这个密钥？",
+    "ssh_guide_copy_key": "复制公钥",
+    "ssh_guide_copied": "已复制！",
+    "ssh_guide_hint": "将公钥发给服务器管理员，或运行以下命令：",
+    "ssh_guide_or": "或者手动追加到服务器的 ~/.ssh/authorized_keys"
   },
   "browser": {
     "title": "浏览器自动化",

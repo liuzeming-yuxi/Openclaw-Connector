@@ -756,6 +756,82 @@ fn list_ssh_keys() -> Result<Vec<String>, String> {
     Ok(keys)
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GenerateKeyResult {
+    private_key_path: String,
+    public_key: String,
+}
+
+#[tauri::command]
+fn generate_ssh_key() -> Result<GenerateKeyResult, String> {
+    let home = dirs::home_dir().ok_or("cannot determine home directory")?;
+    let ssh_dir = home.join(".ssh");
+    std::fs::create_dir_all(&ssh_dir)
+        .map_err(|e| format!("failed to create ~/.ssh: {e}"))?;
+
+    // Find a unique name: id_ed25519_openclaw, id_ed25519_openclaw_2, etc.
+    let mut name = "id_ed25519_openclaw".to_string();
+    let mut idx = 2u32;
+    while ssh_dir.join(&name).exists() {
+        name = format!("id_ed25519_openclaw_{idx}");
+        idx += 1;
+    }
+
+    let key_path = ssh_dir.join(&name);
+    let output = std::process::Command::new("ssh-keygen")
+        .args([
+            "-t", "ed25519",
+            "-f", &key_path.to_string_lossy(),
+            "-N", "",
+            "-C", "openclaw-connector",
+        ])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .map_err(|e| format!("failed to run ssh-keygen: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("ssh-keygen failed: {}", stderr.trim()));
+    }
+
+    let pub_path = ssh_dir.join(format!("{name}.pub"));
+    let public_key = std::fs::read_to_string(&pub_path)
+        .map_err(|e| format!("failed to read public key: {e}"))?
+        .trim()
+        .to_string();
+
+    Ok(GenerateKeyResult {
+        private_key_path: format!("~/.ssh/{name}"),
+        public_key,
+    })
+}
+
+#[tauri::command]
+fn read_ssh_public_key(key_path: String) -> Result<String, String> {
+    let resolved = if let Some(rest) = key_path.strip_prefix("~/") {
+        match dirs::home_dir() {
+            Some(home) => home.join(rest),
+            None => std::path::PathBuf::from(&key_path),
+        }
+    } else {
+        std::path::PathBuf::from(&key_path)
+    };
+
+    let pub_path = resolved.with_extension(
+        match resolved.extension() {
+            Some(ext) => format!("{}.pub", ext.to_string_lossy()),
+            None => "pub".to_string(),
+        }
+    );
+
+    std::fs::read_to_string(&pub_path)
+        .map(|s| s.trim().to_string())
+        .map_err(|_| format!("public key not found: {}", pub_path.display()))
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
@@ -771,6 +847,8 @@ pub fn run() {
             test_ssh_connection,
             read_remote_gateway_config,
             list_ssh_keys,
+            generate_ssh_key,
+            read_ssh_public_key,
             list_agents,
             list_sessions,
             inject_message,
